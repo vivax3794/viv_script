@@ -1,25 +1,32 @@
 use inkwell_llvm12::{
-    builder::Builder, context::Context, module::Module, values::IntValue, AddressSpace,
+    builder::Builder, context::Context, module::Module, values::{IntValue, PointerValue}, AddressSpace,
 };
 
 use super::ast::*;
 
-pub struct Compiler<'ctx> {
+enum Value<'ctx> {
+    Number(IntValue<'ctx>),
+    String(PointerValue<'ctx>)
+}
+
+pub struct Compiler<'code, 'ctx> {
+    raw_code: &'code str,
     context: &'ctx Context,
     module: Module<'ctx>,
     builder: Builder<'ctx>,
 }
 
-impl<'ctx> Compiler<'ctx> {
+impl<'code, 'ctx> Compiler<'code, 'ctx> {
     pub fn create_context() -> Context {
         Context::create()
     }
 
-    pub fn new(context: &'ctx Context) -> Self {
+    pub fn new(code: &'code str, context: &'ctx Context) -> Self {
         let module = context.create_module("TMP");
         let builder = context.create_builder();
 
         Self {
+            raw_code: code,
             context,
             module,
             builder,
@@ -38,36 +45,56 @@ impl<'ctx> Compiler<'ctx> {
             .add_function("printf", printf_function_type, None);
     }
 
-    fn compile_literal(&self, lit: LiteralType) -> IntValue {
+    fn compile_literal(&self, lit: LiteralType) -> Value {
         match lit {
-            LiteralType::LitI32(value) => {
+            LiteralType::Number(value) => {
                 let i32_type = self.context.i32_type();
-                i32_type.const_int(value as u64, false)
+                Value::Number(i32_type.const_int(value as u64, false))
+            },
+            LiteralType::String(value) => {
+                let global_string = unsafe {
+                    self.builder.build_global_string(&value, "Literal_String")
+                };
+                let ptr_to_string = global_string.as_pointer_value();
+                Value::String(ptr_to_string)
             }
         }
     }
 
-    fn compile_expression(&self, exp: ExpressionType) -> IntValue {
+    fn compile_expression(&self, exp: ExpressionType) -> Value {
         match exp {
             ExpressionType::Literal(lit) => self.compile_literal(lit),
             ExpressionType::Binary(left, op, right) => {
                 let left = self.compile_expression(left.specifics);
                 let right = self.compile_expression(right.specifics);
 
-                match op {
-                    Operator::Plus => self.builder.build_int_add(left, right, "+"),
+                match (left, right) {
+                    (Value::Number(left), Value::Number(right)) => Value::Number(match op {
+                        Operator::Plus => self.builder.build_int_add(left, right, "+"),
+                        Operator::Minus => self.builder.build_int_sub(left, right, "-"),
+                    }),
+                    _ => panic!("Can not these types of values!"),
                 }
             }
         }
     }
 
     fn compile_print(&self, to_print: ExpressionType) {
-        let value = self.compile_expression(to_print);
+        let value_hinted = self.compile_expression(to_print);
+        let value = match value_hinted {
+            Value::Number(val) => val.into(),
+            Value::String(val) => val.into(),
+        };
+
+        let format_string = match value_hinted {
+            Value::Number(_) => "%d\n",
+            Value::String(_) => "%s\n"
+        };
 
         let printf_function = self.module.get_function("printf").unwrap();
         let format_string = unsafe {
             self.builder
-                .build_global_string("%d\n", "I32_Print_Format_String")
+                .build_global_string(format_string, "Print_Format_String")
         };
         let printf_arguments = [
             // Format string
@@ -78,7 +105,7 @@ impl<'ctx> Compiler<'ctx> {
                     "Format",
                 )
                 .into(),
-            value.into(),
+            value,
         ];
 
         self.builder

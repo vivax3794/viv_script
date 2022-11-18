@@ -32,9 +32,11 @@ pub enum ExpressionType<'a> {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Operator {
     Plus,
+    Minus
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum LiteralType {
-    LitI32(i32)
+    Number(i32),
+    String(String)
 }

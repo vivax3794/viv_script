@@ -1,6 +1,7 @@
 use nom::{
-    bytes::complete::tag,
-    character::complete::{digit1, multispace0, multispace1},
+    branch::alt,
+    bytes::{complete::{tag, tag_no_case}},
+    character::complete::{digit1, multispace0, multispace1, one_of},
     combinator::{map, opt},
     error::VerboseError,
     multi::many0,
@@ -14,32 +15,51 @@ use crate::ast::*;
 pub type Span<'a> = LocatedSpan<&'a str>;
 type Res<'a, T> = IResult<Span<'a>, T, VerboseError<Span<'a>>>;
 
-fn lit_i32(c: Span) -> Res<LiteralType> {
+const VALID_STRING_CHARS: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ !?.";
+
+fn lit_number(c: Span) -> Res<LiteralType> {
     map(
         tuple((opt(tag("-")), digit1)),
         |(sign, digits): (Option<Span>, Span)| {
             let value: i32 = digits.fragment().parse().unwrap();
             let value = if sign.is_none() { value } else { -value };
-            LiteralType::LitI32(value)
+            LiteralType::Number(value)
         },
     )(c)
 }
 
+fn lit_string(c: Span) -> Res<LiteralType> {
+    map(
+        delimited(tag("\""), many0(one_of(VALID_STRING_CHARS)), tag("\"")),
+        |st: Vec<char>| LiteralType::String(st.into_iter().collect())
+    )(c)
+}
+
 fn exp_lit(c: Span) -> Res<Expression> {
-    map(tuple((lit_i32, position)), |(val, pos)| Expression {
+    map(tuple((alt((lit_number, lit_string)), position)), |(val, pos)| Expression {
         pos,
         specifics: ExpressionType::Literal(val),
     })(c)
 }
 
+fn exp_paren(c: Span) -> Res<Expression> {
+    alt((delimited(tag("("), exp_add_sub, tag(")")), exp_lit))(c)
+}
+
 fn exp_add_sub(c: Span) -> Res<Expression> {
     let (r, pos) = position(c)?;
-    let (r, left) = exp_lit(r)?;
-    if let (r, Some(op)) = opt(delimited(multispace0, tag("+"), multispace0))(r)? {
+    let (r, left) = exp_paren(r)?;
+    if let (r, Some(op)) = opt(delimited(
+        multispace0,
+        alt((tag("+"), tag("-"))),
+        multispace0,
+    ))(r)?
+    {
         let (r, right) = exp_add_sub(r)?;
 
         let op = match *op.fragment() {
             "+" => Operator::Plus,
+            "-" => Operator::Minus,
             _ => panic!("unknown operator {}", op),
         };
 
@@ -91,16 +111,16 @@ mod test {
 
     #[test]
     fn i32_positive() {
-        let (res, result) = lit_i32("123".into()).unwrap();
+        let (res, result) = lit_number("123".into()).unwrap();
         assert_eq!(*res.fragment(), "");
-        assert_eq!(result, LiteralType::LitI32(123));
+        assert_eq!(result, LiteralType::Number(123));
     }
 
     #[test]
     fn i32_negative() {
-        let (res, result) = lit_i32("-123".into()).unwrap();
+        let (res, result) = lit_number("-123".into()).unwrap();
         assert_eq!(*res.fragment(), "");
-        assert_eq!(result, LiteralType::LitI32(-123));
+        assert_eq!(result, LiteralType::Number(-123));
     }
 
     #[test]
@@ -112,12 +132,12 @@ mod test {
             Expression {
                 specifics: ExpressionType::Binary(
                     box Expression {
-                        specifics: ExpressionType::Literal(LiteralType::LitI32(1)),
+                        specifics: ExpressionType::Literal(LiteralType::Number(1)),
                         ..
                     },
                     Operator::Plus,
                     box Expression {
-                        specifics: ExpressionType::Literal(LiteralType::LitI32(3)),
+                        specifics: ExpressionType::Literal(LiteralType::Number(3)),
                         ..
                     }
                 ),
@@ -134,5 +154,11 @@ mod test {
     #[test]
     fn t_statement() {
         statement("          print 1;        ".into()).unwrap();
+    }
+
+    #[test]
+    fn grouping() {
+        let (res, _result) = exp_add_sub("1 - (5 + 2)".into()).unwrap();
+        assert_eq!(*res.fragment(), "");
     }
 }

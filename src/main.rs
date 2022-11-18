@@ -1,13 +1,12 @@
 use viv_script::Compiler;
 
-const TEST_CODE: &str = "
-print 1 + 2 + 3;
-";
+const TEST_CODE: &str = include_str!("../test.viv");
 
 fn main() {
-    let (_, ast) = viv_script::code_block(TEST_CODE.into()).unwrap();
+    let (rest, ast) = viv_script::code_block(TEST_CODE.into()).unwrap();
+    assert_eq!(*rest.fragment(), "");
     let ctx = Compiler::create_context();
-    let compiler = Compiler::new(&ctx);
+    let compiler = Compiler::new(TEST_CODE, &ctx);
     compiler.compile_code(ast);
     compiler.save_in("test.ll");
 }
