@@ -17,3 +17,18 @@ Install build dependencies
 ```bash
 sudo apt install llvm-12 zlib1g-dev libclang-common-12-dev build-essential
 ```
+
+Create your test file, we will use `test.viv` for this example
+```
+print "Hello World!";
+```
+
+Compile your amazing code!
+```
+cargo run -- test.viv test
+```
+
+Now you can run it! 
+```bash
+./test
+```
