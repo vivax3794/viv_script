@@ -13,7 +13,7 @@ git clone https://github.com/vivax3794/viv_script.git
 cd viv_script
 ```
 
-Install build dependencies
+Install build and runtime dependencies
 ```bash
 sudo apt install llvm-12 zlib1g-dev libclang-common-12-dev build-essential
 ```
