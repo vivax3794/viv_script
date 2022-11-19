@@ -1,38 +1,26 @@
-use crate::parser::Span;
+#[derive(Debug, PartialEq, Eq)]
+pub struct CodeBody {
+    pub statements: Vec<Statement>,
+}
 
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct CodeBody<'a> {
-    pub statements: Vec<Statement<'a>>,
+pub enum Statement {
+    Print(Expression)
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct  Statement<'a> {
-    pub pos: Span<'a>,
-    pub specifics: StatementType<'a>,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum StatementType<'a> {
-    Print(Expression<'a>)
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct Expression<'a> {
-    pub pos: Span<'a>,
-    pub specifics: ExpressionType<'a>,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum ExpressionType<'a> {
+pub enum Expression {
     Literal(LiteralType),
-    Binary(Box<Expression<'a>>, Operator, Box<Expression<'a>>)
+    Binary(Box<Expression>, Operator, Box<Expression>)
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Operator {
-    Plus,
-    Minus
+    Add,
+    Sub,
+    Mul,
+    Div,
 }
 
 #[derive(Debug, PartialEq, Eq)]

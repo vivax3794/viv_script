@@ -1,5 +1,5 @@
 use inkwell_llvm12::{
-    builder::Builder, context::Context, module::Module, values::{IntValue, PointerValue}, AddressSpace,
+    builder::Builder, context::Context, module::Module, values::{IntValue, PointerValue, FunctionValue}, AddressSpace, passes::PassManager,
 };
 
 use super::ast::*;
@@ -14,6 +14,7 @@ pub struct Compiler<'code, 'ctx> {
     context: &'ctx Context,
     module: Module<'ctx>,
     builder: Builder<'ctx>,
+    fpm: PassManager<Module<'ctx>>,
 }
 
 impl<'code, 'ctx> Compiler<'code, 'ctx> {
@@ -21,15 +22,43 @@ impl<'code, 'ctx> Compiler<'code, 'ctx> {
         Context::create()
     }
 
-    pub fn new(code: &'code str, context: &'ctx Context) -> Self {
-        let module = context.create_module("TMP");
+    pub fn new(name: &str, code: &'code str, context: &'ctx Context) -> Self {
+        let module = context.create_module(name);
         let builder = context.create_builder();
+
+        let fpm = PassManager::create(());
+
+        fpm.add_ipsccp_pass();
+        fpm.add_new_gvn_pass();
+        fpm.add_ind_var_simplify_pass();
+        fpm.add_instruction_simplify_pass();
+        fpm.add_instruction_combining_pass();
+
+        fpm.add_constant_merge_pass();
+        fpm.add_global_optimizer_pass();
+
+        fpm.add_merge_functions_pass();
+        fpm.add_dead_arg_elimination_pass();
+        fpm.add_argument_promotion_pass();
+        fpm.add_function_attrs_pass();
+        fpm.add_function_inlining_pass();
+        fpm.add_tail_call_elimination_pass();
+
+        fpm.add_licm_pass();
+        fpm.add_loop_unswitch_pass();
+
+        fpm.add_cfg_simplification_pass();
+
+        fpm.add_global_dce_pass();
+        fpm.add_aggressive_dce_pass();
+        fpm.add_loop_deletion_pass();
 
         Self {
             raw_code: code,
             context,
             module,
             builder,
+            fpm
         }
     }
 
@@ -61,17 +90,19 @@ impl<'code, 'ctx> Compiler<'code, 'ctx> {
         }
     }
 
-    fn compile_expression(&self, exp: ExpressionType) -> Value {
+    fn compile_expression(&self, exp: Expression) -> Value {
         match exp {
-            ExpressionType::Literal(lit) => self.compile_literal(lit),
-            ExpressionType::Binary(left, op, right) => {
-                let left = self.compile_expression(left.specifics);
-                let right = self.compile_expression(right.specifics);
+            Expression::Literal(lit) => self.compile_literal(lit),
+            Expression::Binary(left, op, right) => {
+                let left = self.compile_expression(*left);
+                let right = self.compile_expression(*right);
 
                 match (left, right) {
                     (Value::Number(left), Value::Number(right)) => Value::Number(match op {
-                        Operator::Plus => self.builder.build_int_add(left, right, "+"),
-                        Operator::Minus => self.builder.build_int_sub(left, right, "-"),
+                        Operator::Add => self.builder.build_int_add(left, right, "Number_Add"),
+                        Operator::Sub => self.builder.build_int_sub(left, right, "Number_Sub"),
+                        Operator::Mul => self.builder.build_int_mul(left, right, "Number_Mul"),
+                        Operator::Div => self.builder.build_int_signed_div(left, right, "Number_Div"),
                     }),
                     _ => panic!("Can not these types of values!"),
                 }
@@ -79,7 +110,7 @@ impl<'code, 'ctx> Compiler<'code, 'ctx> {
         }
     }
 
-    fn compile_print(&self, to_print: ExpressionType) {
+    fn compile_print(&self, to_print: Expression) {
         let value_hinted = self.compile_expression(to_print);
         let value = match value_hinted {
             Value::Number(val) => val.into(),
@@ -112,9 +143,9 @@ impl<'code, 'ctx> Compiler<'code, 'ctx> {
             .build_call(printf_function, &printf_arguments, "Print_Statement");
     }
 
-    fn compile_statement(&self, stmt: StatementType) {
+    fn compile_statement(&self, stmt: Statement) {
         match stmt {
-            StatementType::Print(expr) => self.compile_print(expr.specifics),
+            Statement::Print(expr) => self.compile_print(expr),
         }
     }
 
@@ -132,11 +163,13 @@ impl<'code, 'ctx> Compiler<'code, 'ctx> {
         self.builder.position_at_end(entry);
 
         for stmt in code.statements {
-            self.compile_statement(stmt.specifics);
+            self.compile_statement(stmt);
         }
 
         self.builder
             .build_return(Some(&i32_type.const_int(0, false)));
+        
+        self.fpm.run_on(&self.module);
     }
 
     pub fn save_in(&self, path: &str) {

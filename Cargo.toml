@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+clap = { version = "4.0.26", features = ["derive"] }
 inkwell_llvm12 = "0.1.2"
 nom = "7.1.1"
-nom_locate = "4.0.0"
+temp-file = "0.1.7"
