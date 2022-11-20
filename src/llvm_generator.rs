@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use inkwell_llvm12::{
+    attributes::{Attribute, AttributeLoc},
     basic_block::BasicBlock,
     builder::Builder,
     context::Context,
@@ -102,28 +103,49 @@ impl<'code, 'ctx> Compiler<'code, 'ctx> {
         let size_type = self.context.i64_type();
         let void_type = self.context.void_type();
 
+        let no_inline = self.context.create_string_attribute("noinline", "");
+
         // printf
         let printf_argument_types = [i8_ptr_type.into()];
         let printf_function_type = i32_type.fn_type(&printf_argument_types, true);
         self.module
-            .add_function("printf", printf_function_type, None);
+            .add_function("printf", printf_function_type, None)
+            .add_attribute(AttributeLoc::Function, no_inline);
 
         // void* malloc( size_t size );
         let malloc_argument_types = [size_type.into()];
         let malloc_function_type = i8_ptr_type.fn_type(&malloc_argument_types, false);
         self.module
-            .add_function("malloc", malloc_function_type, None);
+            .add_function("malloc", malloc_function_type, None)
+            .add_attribute(AttributeLoc::Function, no_inline);
 
         // void free( void* ptr );
         let free_argument_types = [i8_ptr_type.into()];
         let free_function_type = void_type.fn_type(&free_argument_types, false);
-        self.module.add_function("free", free_function_type, None);
+        self.module
+            .add_function("free", free_function_type, None)
+            .add_attribute(AttributeLoc::Function, no_inline);
 
         // size_t strlen( const char *str );
         let strlen_argument_types = [i8_ptr_type.into()];
         let strlen_function_type = size_type.fn_type(&strlen_argument_types, false);
         self.module
-            .add_function("strlen", strlen_function_type, None);
+            .add_function("strlen", strlen_function_type, None)
+            .add_attribute(AttributeLoc::Function, no_inline);
+
+        // char *strcpy( char *dest, const char *src );
+        let strcpy_argument_types = [i8_ptr_type.into(), i8_ptr_type.into()];
+        let strcpy_function_type = i8_ptr_type.fn_type(&strcpy_argument_types, false);
+        self.module
+            .add_function("strcpy", strcpy_function_type, None)
+            .add_attribute(AttributeLoc::Function, no_inline);
+
+        // void* memcpy( void *dest, const void *src, size_t count );
+        let memcpy_argument_types = [i8_ptr_type.into(), i8_ptr_type.into(), size_type.into()];
+        let memcpy_function_type = i8_ptr_type.fn_type(&memcpy_argument_types, false);
+        self.module
+            .add_function("memcpy", memcpy_function_type, None)
+            .add_attribute(AttributeLoc::Function, no_inline);
     }
 
     fn compile_literal(&self, lit: LiteralType) -> Value {
@@ -234,6 +256,7 @@ impl<'code, 'ctx> Compiler<'code, 'ctx> {
                 // used functions and types
                 let size_type = self.context.i64_type();
                 let strlen = self.module.get_function("strlen").unwrap();
+                let memcpy = self.module.get_function("memcpy").unwrap();
 
                 // Get owned pointer to string
                 let heap_ptr = match ownership {
@@ -243,16 +266,20 @@ impl<'code, 'ctx> Compiler<'code, 'ctx> {
                     }
                     PointerOwnership::Borrow => {
                         // We dont own this string so we are gonna make a copy of it!
+                        let i8_ptr_type = self.context.i8_type().ptr_type(AddressSpace::Generic);
 
                         // get lenght
-                        let strln_arguments = [value.into()];
+                        let strln_arguments = [self
+                            .builder
+                            .build_pointer_cast(value, i8_ptr_type, "Str_Len_Arg")
+                            .into()];
                         let lenght =
                             self.builder
                                 .build_call(strlen, &strln_arguments, "String_Lenght");
                         let lenght = lenght.try_as_basic_value().left().unwrap().into_int_value();
                         let lenght = self.builder.build_int_add(
                             lenght,
-                            size_type.const_int(8, false),
+                            size_type.const_int(1, false),
                             "String_Space",
                         );
 
@@ -261,11 +288,25 @@ impl<'code, 'ctx> Compiler<'code, 'ctx> {
                         let heap_ptr =
                             self.builder
                                 .build_call(malloc, &malloc_arguments, "Heap_Pointer");
-                        heap_ptr
+                        let heap_ptr = heap_ptr
                             .try_as_basic_value()
                             .left()
                             .unwrap()
-                            .into_pointer_value()
+                            .into_pointer_value();
+
+                        // Copy string
+                        let memcpy_arguments = [
+                            self.builder
+                                .build_pointer_cast(heap_ptr, i8_ptr_type, "Strcpy_Dest")
+                                .into(),
+                            self.builder
+                                .build_pointer_cast(value, i8_ptr_type, "Strcpy_Src")
+                                .into(),
+                            lenght.into(),
+                        ];
+                        self.builder.build_call(memcpy, &memcpy_arguments, "Memcpy");
+
+                        heap_ptr
                     }
                 };
 
@@ -287,10 +328,12 @@ impl<'code, 'ctx> Compiler<'code, 'ctx> {
     }
 
     fn compile_assignment(&self, name: String, exp: Expression) {
+        // The expression might need the function context
+        let value = self.compile_expression(exp);
+
         let mut function_context = self.function_context.borrow_mut();
         let function_context = function_context.as_mut().unwrap();
 
-        let value = self.compile_expression(exp);
         let var = match function_context.vars.get(&name) {
             Some(var) => *var,
             None => {
