@@ -277,6 +277,7 @@ impl<'code, 'ctx> Compiler<'code, 'ctx> {
                             self.builder
                                 .build_call(strlen, &strln_arguments, "String_Lenght");
                         let lenght = lenght.try_as_basic_value().left().unwrap().into_int_value();
+                        // strlen does not include the null string 
                         let lenght = self.builder.build_int_add(
                             lenght,
                             size_type.const_int(1, false),
