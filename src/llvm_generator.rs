@@ -436,6 +436,10 @@ impl<'code, 'ctx> Compiler<'code, 'ctx> {
 
         self.builder
             .build_return(Some(&i32_type.const_int(0, false)));
+
+        // We need to add this at the end of the block
+        // We could get away with not having two of the block if we could easialy add to the start
+        // but the IR optimizer will optimize this away anyway :D 
         self.builder.position_at_end(entry_block);
         self.builder.build_unconditional_branch(code_block);
 
