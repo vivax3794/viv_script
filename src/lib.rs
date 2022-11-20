@@ -4,12 +4,12 @@ mod ast;
 mod llvm_generator;
 mod parser;
 
-pub fn compile_to_ir(name: &str, code: &str, output: &str) {
+pub fn compile_to_ir(name: &str, code: &str, output: &str, optimize: bool) {
     let (_, ast) = parser::code_block(code).unwrap();
     let ctx = llvm_generator::Compiler::create_context();
     let compiler = llvm_generator::Compiler::new(name, code, &ctx);
 
-    compiler.compile_code(ast);
+    compiler.compile_code(ast, optimize);
     compiler.save_in(output);
 }
 

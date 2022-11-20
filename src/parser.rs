@@ -5,14 +5,15 @@ use nom::{
     character::complete::{digit1, multispace0, multispace1, one_of},
     combinator::{map, opt},
     error::VerboseError,
-    multi::many0,
-    sequence::{delimited, tuple},
+    multi::{many0, many1},
+    sequence::{delimited, separated_pair, terminated, tuple},
     IResult,
 };
 
 type Res<'a, T> = IResult<&'a str, T, VerboseError<&'a str>>;
 
-const VALID_STRING_CHARS: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ !?.";
+const VALID_STRING_CHARS: &str =
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 !?.";
 
 fn lit_number(c: &str) -> Res<LiteralType> {
     map(
@@ -40,8 +41,20 @@ fn exp_lit(c: &str) -> Res<Expression> {
     })(c)
 }
 
+const VALID_VAR_CHARS: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+fn exp_var(c: &str) -> Res<Expression> {
+    map(many1(one_of(VALID_VAR_CHARS)), |name| {
+        Expression::Var(name.into_iter().collect())
+    })(c)
+}
+
+fn exp_value(c: &str) -> Res<Expression> {
+    alt((exp_var, exp_lit))(c)
+}
+
 fn exp_paren(c: &str) -> Res<Expression> {
-    alt((delimited(tag("("), exp_add_sub, tag(")")), exp_lit))(c)
+    alt((delimited(tag("("), exp_add_sub, tag(")")), exp_value))(c)
 }
 
 //  We need left-ascoativity
@@ -58,7 +71,7 @@ macro_rules! binary_expression {
             {
                 let (r, right) = $next(r)?;
                 r_hole = r;
-                
+
 
                 let op = match op {
                     $($lit => $val),*
@@ -66,7 +79,7 @@ macro_rules! binary_expression {
                     _ => panic!("unknown operator {}", op),
                 };
                 left = Expression::Binary(Box::new(left), op, Box::new(right));
-            } 
+            }
             Ok((r_hole, left))
         }
     };
@@ -79,9 +92,8 @@ binary_expression!(fn exp_mul_div() exp_paren, {
 
 binary_expression!(fn exp_add_sub() exp_mul_div, {
     "+" => Operator::Add,
-    "-" => Operator::Sub 
+    "-" => Operator::Sub
 });
-
 
 fn print_statement(c: &str) -> Res<Statement> {
     map(
@@ -94,8 +106,22 @@ fn print_statement(c: &str) -> Res<Statement> {
     )(c)
 }
 
+fn assignment(c: &str) -> Res<Statement> {
+    map(
+        terminated(
+            separated_pair(
+                many1(one_of(VALID_VAR_CHARS)),
+                tuple((multispace0, tag("="), multispace0)),
+                exp_add_sub,
+            ),
+            tuple((multispace0, tag(";"))),
+        ),
+        |(name, exp)| Statement::Assignment(name.into_iter().collect(), exp),
+    )(c)
+}
+
 fn statement(c: &str) -> Res<Statement> {
-    delimited(multispace0, print_statement, multispace0)(c)
+    delimited(multispace0, alt((print_statement, assignment)), multispace0)(c)
 }
 
 pub fn code_block(c: &str) -> Res<CodeBody> {

@@ -7,6 +7,10 @@ use clap::Parser;
 struct Args {
     input_file: String,
     output_file: String,
+    #[arg(short, long)]
+    ir_only: bool,
+    #[arg(short, long)]
+    no_optimize: bool
 }
 
 fn main() {
@@ -21,11 +25,15 @@ fn main() {
     let exe_file = args.output_file;
 
     let code = std::fs::read_to_string(&args.input_file).unwrap();
-    compile_to_ir(&args.input_file, &code, ir_file);
 
-    let llc = find_exe(vec!["llc-12", "llc"]).expect("llc binary not found");
-    let gcc = find_exe(vec!["clang", "gcc"]).expect("gcc/clang not found on system");
+    if args.ir_only {
+        compile_to_ir(&args.input_file, &code, &exe_file, !args.no_optimize);
+    } else {
+        let llc = find_exe(vec!["llc-12", "llc"]).expect("llc binary not found");
+        let gcc = find_exe(vec!["clang", "gcc"]).expect("gcc/clang not found on system");
 
-    compile_to_obj(llc, ir_file, obj_file);
-    compile_to_exe(gcc, obj_file, &exe_file);
+        compile_to_ir(&args.input_file, &code, ir_file, !args.no_optimize);
+        compile_to_obj(llc, ir_file, obj_file);
+        compile_to_exe(gcc, obj_file, &exe_file);
+    }
 }
