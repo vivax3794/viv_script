@@ -7,7 +7,7 @@ mod parser;
 pub fn compile_to_ir(name: &str, code: &str, output: &str, optimize: bool) {
     let (_, ast) = parser::code_block(code).unwrap();
     let ctx = llvm_generator::Compiler::create_context();
-    let compiler = llvm_generator::Compiler::new(name, code, &ctx);
+    let compiler = llvm_generator::Compiler::new(name, &ctx);
 
     compiler.compile_code(ast, optimize);
     compiler.save_in(output);
@@ -22,7 +22,7 @@ pub fn compile_to_obj(llc: PathBuf, from: &str, to: &str) {
         .unwrap()
         .success()
         .then_some(())
-        .unwrap();
+        .expect("Non zero exit code");
 }
 
 pub fn compile_to_exe(gcc: PathBuf, from: &str, to: &str) {
@@ -34,7 +34,24 @@ pub fn compile_to_exe(gcc: PathBuf, from: &str, to: &str) {
         .unwrap()
         .success()
         .then_some(())
-        .unwrap();
+        .expect("Non zero exit code");
+}
+
+pub fn run_exe(exe: &str) {
+    let mut exe = PathBuf::from(exe);
+
+    if exe.is_relative() {
+        exe = PathBuf::from(".").join(exe);
+    }
+
+    std::process::Command::new(exe)
+        .spawn()
+        .unwrap()
+        .wait()
+        .unwrap()
+        .success()
+        .then_some(())
+        .expect("Non zero exit code");
 }
 
 /// Lists are given in order first

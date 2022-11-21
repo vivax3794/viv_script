@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use inkwell_llvm12::{
-    attributes::{Attribute, AttributeLoc},
+    attributes::{AttributeLoc},
     basic_block::BasicBlock,
     builder::Builder,
     context::Context,
@@ -40,8 +40,7 @@ struct FunctionContext<'ctx> {
     allocate_block: BasicBlock<'ctx>,
 }
 
-pub struct Compiler<'code, 'ctx> {
-    raw_code: &'code str,
+pub struct Compiler<'ctx> {
     context: &'ctx Context,
     module: Module<'ctx>,
     builder: Builder<'ctx>,
@@ -49,12 +48,12 @@ pub struct Compiler<'code, 'ctx> {
     function_context: RefCell<Option<FunctionContext<'ctx>>>,
 }
 
-impl<'code, 'ctx> Compiler<'code, 'ctx> {
+impl<'ctx> Compiler<'ctx> {
     pub fn create_context() -> Context {
         Context::create()
     }
 
-    pub fn new(name: &str, code: &'code str, context: &'ctx Context) -> Self {
+    pub fn new(name: &str, context: &'ctx Context) -> Self {
         let module = context.create_module(name);
         let builder = context.create_builder();
 
@@ -87,7 +86,6 @@ impl<'code, 'ctx> Compiler<'code, 'ctx> {
         fpm.add_loop_deletion_pass();
 
         Self {
-            raw_code: code,
             context,
             module,
             builder,
@@ -429,7 +427,7 @@ impl<'code, 'ctx> Compiler<'code, 'ctx> {
             current_block: code_block,
         }));
 
-        for stmt in code.statements {
+        for stmt in code.0 {
             self.compile_statement(stmt);
         }
 

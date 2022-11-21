@@ -125,54 +125,5 @@ fn statement(c: &str) -> Res<Statement> {
 }
 
 pub fn code_block(c: &str) -> Res<CodeBody> {
-    map(many0(statement), |statements| CodeBody { statements })(c)
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn i32_positive() {
-        let (res, result) = lit_number("123".into()).unwrap();
-        assert_eq!(res, "");
-        assert_eq!(result, LiteralType::Number(123));
-    }
-
-    #[test]
-    fn i32_negative() {
-        let (res, result) = lit_number("-123".into()).unwrap();
-        assert_eq!(res, "");
-        assert_eq!(result, LiteralType::Number(-123));
-    }
-
-    #[test]
-    fn add() {
-        let (res, result) = exp_add_sub("1 + 3".into()).unwrap();
-        assert_eq!(res, "");
-        assert_eq!(
-            result,
-            Expression::Binary(
-                Box::new(Expression::Literal(LiteralType::Number(1))),
-                Operator::Add,
-                Box::new(Expression::Literal(LiteralType::Number(3))),
-            )
-        );
-    }
-
-    #[test]
-    fn print() {
-        print_statement("print 1;".into()).unwrap();
-    }
-
-    #[test]
-    fn t_statement() {
-        statement("          print 1;        ".into()).unwrap();
-    }
-
-    #[test]
-    fn grouping() {
-        let (res, _result) = exp_add_sub("1 - (5 + 2)".into()).unwrap();
-        assert_eq!(res, "");
-    }
+    map(many0(statement), CodeBody)(c)
 }
