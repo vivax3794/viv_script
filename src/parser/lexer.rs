@@ -43,19 +43,19 @@ impl Lexer {
 
     fn advance_until<P>(&mut self, predicate: P)
     where
-        P: FnMut(char) -> bool,
+        P: Fn(char) -> bool,
     {
-        while self.peek().map(predicate).unwrap_or(false) {
+        while self.peek().map(&predicate).unwrap_or(false) {
             self.advance();
         }
     }
 
     fn take_while<P>(&mut self, predicate: P) -> String
     where
-        P: FnMut(char) -> bool,
+        P: Fn(char) -> bool,
     {
-        let chars = Vec::new();
-        while self.peek().map(predicate).unwrap_or(false) {
+        let mut chars = Vec::new();
+        while self.peek().map(&predicate).unwrap_or(false) {
             chars.push(self.advance().unwrap());
         }
 
@@ -84,7 +84,7 @@ impl Lexer {
 
     pub fn parse_file(&mut self) -> Result<Vec<Token>, (String, SourceLocation)> {
         self.eat_whitespace();
-        let error = Ok(());
+        let mut error = Ok(());
         while let Some(char) = self.advance() {
             match char {
                 ';' => self.emit_token(1, TokenValue::Semicolon),
@@ -93,8 +93,8 @@ impl Lexer {
                 '*' => self.emit_token(1, TokenValue::Star),
                 '/' => self.emit_token(1, TokenValue::FSlash),
                 '=' => self.emit_token(1, TokenValue::Eq),
-                char if char.is_digit(10) => {
-                    let digits = char.to_string() + &self.take_while(|c| c.is_digit(10));
+                char if char.is_ascii_digit() => {
+                    let digits = char.to_string() + &self.take_while(|c| c.is_ascii_digit());
                     self.emit_token(digits.len(), TokenValue::Number(digits));
                 }
                 '"' => {
@@ -111,6 +111,8 @@ impl Lexer {
                         ));
                         break;
                     }
+
+                    self.emit_token(string_content.len() + 2, TokenValue::String(string_content));
                 }
                 char if char.is_alphabetic() => {
                     let word = char.to_string() + &self.take_while(char::is_alphabetic);
@@ -137,6 +139,40 @@ impl Lexer {
 
         self.emit_token(1, TokenValue::EOF);
 
-        error.map(|_| self.tokens)
+        error.map(|_| self.tokens.clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::parser::tokens::TokenValue;
+
+    use super::Lexer;
+
+    fn parse_file(lex: &mut Lexer) -> Vec<TokenValue> {
+        lex.parse_file()
+            .unwrap()
+            .into_iter()
+            .map(|t| t.value)
+            .collect()
+    }
+
+    #[test]
+    fn symbols() {
+        let mut lexer = Lexer::new("    +  -  * / =  ; ");
+        let tokens = parse_file(&mut lexer);
+
+        assert_eq!(
+            tokens,
+            vec![
+                TokenValue::Plus,
+                TokenValue::Minus,
+                TokenValue::Star,
+                TokenValue::FSlash,
+                TokenValue::Eq,
+                TokenValue::Semicolon,
+                TokenValue::EOF
+            ]
+        )
     }
 }

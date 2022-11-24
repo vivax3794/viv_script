@@ -1,3 +1,4 @@
+#[derive(Debug, Clone)]
 pub struct SourceLocation {
     pub line_start: usize,
     pub line_end: usize,

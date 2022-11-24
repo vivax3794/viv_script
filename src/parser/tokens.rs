@@ -1,5 +1,6 @@
 use super::source_location::SourceLocation;
 
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TokenValue {
     // LITERALS
     Number(String),
@@ -19,6 +20,7 @@ pub enum TokenValue {
     EOF
 }
 
+#[derive(Clone)]
 pub struct Token {
     pub value: TokenValue,
     pub source_location: SourceLocation,
