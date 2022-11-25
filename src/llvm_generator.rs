@@ -163,8 +163,8 @@ impl<'ctx> Compiler<'ctx> {
 
     fn compile_expression(&self, exp: Expression) -> Value {
         match exp {
-            Expression::Literal(lit) => self.compile_literal(lit),
-            Expression::Binary(left, op, right) => {
+            Expression::Literal(_, lit) => self.compile_literal(lit),
+            Expression::Binary(_, left, op, right) => {
                 let left = self.compile_expression(*left);
                 let right = self.compile_expression(*right);
 
@@ -180,7 +180,7 @@ impl<'ctx> Compiler<'ctx> {
                     _ => panic!("Can not these types of values!"),
                 }
             }
-            Expression::Var(name) => {
+            Expression::Var(_, name) => {
                 let function_context = self.function_context.borrow();
                 let function_context = function_context.as_ref().unwrap();
                 let var = function_context.vars.get(&name).expect("Var not found");
@@ -403,7 +403,7 @@ impl<'ctx> Compiler<'ctx> {
     fn compile_statement(&self, stmt: Statement) {
         match stmt {
             Statement::Print(expr) => self.compile_print(expr),
-            Statement::Assignment(name, exp) => self.compile_assignment(name, exp),
+            Statement::Assignment(_, name, exp) => self.compile_assignment(name, exp),
         }
     }
 

@@ -5,12 +5,13 @@ mod llvm_generator;
 mod parser;
 
 pub fn compile_to_ir(name: &str, code: &str, output: &str, optimize: bool) {
-    // let (_, ast) = parser::code_block(code).unwrap();
-    // let ctx = llvm_generator::Compiler::create_context();
-    // let compiler = llvm_generator::Compiler::new(name, &ctx);
+    let ast = parser::parse_file(code).unwrap();
 
-    // compiler.compile_code(ast, optimize);
-    // compiler.save_in(output);
+    let ctx = llvm_generator::Compiler::create_context();
+    let compiler = llvm_generator::Compiler::new(name, &ctx);
+
+    compiler.compile_code(ast, optimize);
+    compiler.save_in(output);
 }
 
 pub fn compile_to_obj(llc: PathBuf, from: &str, to: &str) {

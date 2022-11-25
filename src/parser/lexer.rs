@@ -2,6 +2,7 @@ use std::collections::VecDeque;
 
 use super::source_location::SourceLocation;
 use super::tokens::{Token, TokenValue};
+use super::PResult;
 
 pub struct Lexer {
     code: VecDeque<char>,
@@ -13,7 +14,7 @@ pub struct Lexer {
 }
 
 impl Lexer {
-    fn new(code: &str) -> Self {
+    pub fn new(code: &str) -> Self {
         Self {
             code: code.chars().collect(),
             current_line: 1,
@@ -82,7 +83,7 @@ impl Lexer {
         });
     }
 
-    pub fn parse_file(&mut self) -> Result<Vec<Token>, (String, SourceLocation)> {
+    pub fn parse_file(&mut self) -> PResult<Vec<Token>> {
         self.eat_whitespace();
         let mut error = Ok(());
         while let Some(char) = self.advance() {
@@ -93,6 +94,8 @@ impl Lexer {
                 '*' => self.emit_token(1, TokenValue::Star),
                 '/' => self.emit_token(1, TokenValue::FSlash),
                 '=' => self.emit_token(1, TokenValue::Eq),
+                '(' => self.emit_token(1, TokenValue::OpenParen),
+                ')' => self.emit_token(1, TokenValue::CloseParen),
                 char if char.is_ascii_digit() => {
                     let digits = char.to_string() + &self.take_while(|c| c.is_ascii_digit());
                     self.emit_token(digits.len(), TokenValue::Number(digits));
@@ -102,12 +105,12 @@ impl Lexer {
                     let end = self.advance();
                     if end != Some('"') {
                         error = Err((
-                            "Unclosed String".to_string(),
                             SourceLocation::new(
                                 self.current_line,
                                 self.current_char_on_line,
                                 self.current_char_on_line,
                             ),
+                            "Unclosed String".to_string(),
                         ));
                         break;
                     }
@@ -123,12 +126,12 @@ impl Lexer {
                 }
                 _ => {
                     error = Err((
-                        format!("invalid char {char}"),
                         SourceLocation::new(
                             self.current_line,
                             self.current_char_on_line,
                             self.current_char_on_line,
                         ),
+                        format!("invalid char {char}"),
                     ));
                     break;
                 }
@@ -173,6 +176,47 @@ mod tests {
                 TokenValue::Semicolon,
                 TokenValue::EOF
             ]
+        )
+    }
+
+    #[test]
+    fn digit() {
+        let mut lexer = Lexer::new("1234");
+        let tokens = parse_file(&mut lexer);
+
+        assert_eq!(
+            tokens,
+            vec![TokenValue::Number("1234".to_string()), TokenValue::EOF]
+        )
+    }
+
+    #[test]
+    fn string() {
+        let mut lexer = Lexer::new("\"hello\"");
+        let tokens = parse_file(&mut lexer);
+
+        assert_eq!(
+            tokens,
+            vec![TokenValue::String("hello".to_string()), TokenValue::EOF]
+        )
+    }
+
+    #[test]
+    fn keyword() {
+        let mut lexer = Lexer::new("print");
+        let tokens = parse_file(&mut lexer);
+
+        assert_eq!(tokens, vec![TokenValue::Print, TokenValue::EOF])
+    }
+
+    #[test]
+    fn identifier() {
+        let mut lexer = Lexer::new("hello");
+        let tokens = parse_file(&mut lexer);
+
+        assert_eq!(
+            tokens,
+            vec![TokenValue::Identifier("hello".to_string()), TokenValue::EOF]
         )
     }
 }

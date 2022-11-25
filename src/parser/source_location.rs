@@ -1,4 +1,4 @@
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceLocation {
     pub line_start: usize,
     pub line_end: usize,
@@ -13,6 +13,15 @@ impl SourceLocation {
             line_end: line,
             char_start,
             char_end,
+        }
+    }
+
+    pub fn combine(a: &Self, b: &Self) -> Self {
+        Self {
+            line_start: usize::min(a.line_start, b.line_start),
+            line_end: usize::max(a.line_end, b.line_end),
+            char_start: usize::min(a.char_start, b.char_start),
+            char_end: usize::max(a.char_end, b.char_end)
         }
     }
 
@@ -37,5 +46,26 @@ impl SourceLocation {
         let pointers = "^".repeat(self.char_end - self.char_start - 1);
 
         format!("{lines}\n{pointer_padding}{pointers}")
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::SourceLocation;
+
+    #[test]
+    fn create() {
+        let location = SourceLocation::new(1, 2, 3);
+        assert_eq!(location, SourceLocation { line_start: 1, line_end: 1, char_start: 2, char_end: 3});
+    }
+
+    #[test]
+    fn combine() {
+        let location_a = SourceLocation::new(1, 4, 6);
+        let location_b = SourceLocation::new(2, 1, 3);
+        let location_ab = SourceLocation::combine(&location_a, &location_b);
+
+        assert_eq!(location_ab, SourceLocation {line_start: 1, line_end: 2, char_start: 1, char_end: 6});
     }
 }

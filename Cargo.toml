@@ -8,5 +8,4 @@ edition = "2021"
 [dependencies]
 clap = { version = "4.0.26", features = ["derive"] }
 inkwell_llvm12 = "0.1.2"
-nom = "7.1.1"
 temp-file = "0.1.7"

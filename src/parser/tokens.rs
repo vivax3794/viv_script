@@ -17,6 +17,8 @@ pub enum TokenValue {
     Star,
     FSlash,
     Eq,
+    OpenParen,
+    CloseParen,
     EOF
 }
 
