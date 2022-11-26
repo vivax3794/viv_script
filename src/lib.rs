@@ -4,14 +4,24 @@ mod ast;
 mod llvm_generator;
 mod parser;
 
-pub fn compile_to_ir(name: &str, code: &str, output: &str, optimize: bool) {
-    let ast = parser::parse_file(code).unwrap();
+pub use parser::SourceLocation;
+type CompilerResult<T> = Result<T, (SourceLocation, String)>;
+
+pub fn report_error(code: &str, err: (SourceLocation, String)) {
+    let traceback = err.0.get_line_highlights(code);
+    eprintln!("{}\nERROR: {}", traceback, err.1);
+}
+
+pub fn compile_to_ir(name: &str, code: &str, output: &str, optimize: bool) -> CompilerResult<()> {
+    let ast = parser::parse_file(code)?;
 
     let ctx = llvm_generator::Compiler::create_context();
     let compiler = llvm_generator::Compiler::new(name, &ctx);
 
     compiler.compile_code(ast, optimize);
     compiler.save_in(output);
+
+    Ok(())
 }
 
 pub fn compile_to_obj(llc: PathBuf, from: &str, to: &str) {

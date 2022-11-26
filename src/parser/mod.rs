@@ -5,9 +5,9 @@ mod tokens;
 
 pub use source_location::SourceLocation;
 
-type PResult<T> = Result<T, (SourceLocation, String)>;
+use crate::CompilerResult;
 
-pub fn parse_file(code: &str) -> PResult<crate::ast::CodeBody> {
+pub fn parse_file(code: &str) -> CompilerResult<crate::ast::CodeBody> {
     let mut lexer = lexer::Lexer::new(code);
     let tokens = lexer.parse_file()?;
 

@@ -19,7 +19,7 @@ pub enum TokenValue {
     Eq,
     OpenParen,
     CloseParen,
-    EOF
+    Eof
 }
 
 #[derive(Clone)]

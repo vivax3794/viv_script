@@ -1,4 +1,4 @@
-use viv_script::{compile_to_exe, compile_to_ir, compile_to_obj, find_exe, run_exe};
+use viv_script::{compile_to_exe, compile_to_ir, compile_to_obj, find_exe, run_exe, report_error};
 
 use clap::Parser;
 
@@ -29,12 +29,17 @@ fn main() {
     let code = std::fs::read_to_string(&args.input_file).unwrap();
 
     if args.ir {
-        compile_to_ir(&args.input_file, &code, &exe_file, !args.no_optimize);
+        if let Err(err) = compile_to_ir(&args.input_file, &code, &exe_file, !args.no_optimize) {
+            report_error(&code, err)
+        }
     } else {
         let llc = find_exe(vec!["llc-12", "llc"]).expect("llc binary not found");
         let gcc = find_exe(vec!["clang", "gcc"]).expect("gcc/clang not found on system");
 
-        compile_to_ir(&args.input_file, &code, ir_file, !args.no_optimize);
+        if let Err(err) = compile_to_ir(&args.input_file, &code, ir_file, !args.no_optimize) {
+            report_error(&code, err);
+            return;
+        }
         compile_to_obj(llc, ir_file, obj_file);
         compile_to_exe(gcc, obj_file, &exe_file);
 

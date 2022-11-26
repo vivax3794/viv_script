@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use super::source_location::SourceLocation;
 use super::tokens::{Token, TokenValue};
-use super::PResult;
+use crate::CompilerResult;
 
 pub struct Lexer {
     code: VecDeque<char>,
@@ -63,10 +63,6 @@ impl Lexer {
         chars.into_iter().collect()
     }
 
-    fn take_until_whitespace(&mut self) -> String {
-        self.take_while(|c| !c.is_whitespace())
-    }
-
     fn eat_whitespace(&mut self) {
         self.advance_until(char::is_whitespace);
     }
@@ -83,7 +79,7 @@ impl Lexer {
         });
     }
 
-    pub fn parse_file(&mut self) -> PResult<Vec<Token>> {
+    pub fn parse_file(&mut self) -> CompilerResult<Vec<Token>> {
         self.eat_whitespace();
         let mut error = Ok(());
         while let Some(char) = self.advance() {
@@ -117,8 +113,8 @@ impl Lexer {
 
                     self.emit_token(string_content.len() + 2, TokenValue::String(string_content));
                 }
-                char if char.is_alphabetic() => {
-                    let word = char.to_string() + &self.take_while(char::is_alphabetic);
+                char if char.is_alphabetic() || char == '_' => {
+                    let word = char.to_string() + &self.take_while(|c| c.is_alphabetic() || c == '_');
                     match word.as_str() {
                         "print" => self.emit_token(5, TokenValue::Print),
                         _ => self.emit_token(word.len(), TokenValue::Identifier(word)),
@@ -140,7 +136,7 @@ impl Lexer {
             self.eat_whitespace();
         }
 
-        self.emit_token(1, TokenValue::EOF);
+        self.emit_token(1, TokenValue::Eof);
 
         error.map(|_| self.tokens.clone())
     }
@@ -174,7 +170,7 @@ mod tests {
                 TokenValue::FSlash,
                 TokenValue::Eq,
                 TokenValue::Semicolon,
-                TokenValue::EOF
+                TokenValue::Eof
             ]
         )
     }
@@ -186,7 +182,7 @@ mod tests {
 
         assert_eq!(
             tokens,
-            vec![TokenValue::Number("1234".to_string()), TokenValue::EOF]
+            vec![TokenValue::Number("1234".to_string()), TokenValue::Eof]
         )
     }
 
@@ -197,7 +193,7 @@ mod tests {
 
         assert_eq!(
             tokens,
-            vec![TokenValue::String("hello".to_string()), TokenValue::EOF]
+            vec![TokenValue::String("hello".to_string()), TokenValue::Eof]
         )
     }
 
@@ -206,7 +202,7 @@ mod tests {
         let mut lexer = Lexer::new("print");
         let tokens = parse_file(&mut lexer);
 
-        assert_eq!(tokens, vec![TokenValue::Print, TokenValue::EOF])
+        assert_eq!(tokens, vec![TokenValue::Print, TokenValue::Eof])
     }
 
     #[test]
@@ -216,7 +212,7 @@ mod tests {
 
         assert_eq!(
             tokens,
-            vec![TokenValue::Identifier("hello".to_string()), TokenValue::EOF]
+            vec![TokenValue::Identifier("hello".to_string()), TokenValue::Eof]
         )
     }
 }

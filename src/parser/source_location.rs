@@ -43,9 +43,9 @@ impl SourceLocation {
             .max()
             .unwrap();
         let pointer_padding = max_line_number_width + " | ".len() + self.char_start - 1;
-        let pointers = "^".repeat(self.char_end - self.char_start - 1);
+        let pointers = " ".repeat(pointer_padding) + &"^".repeat(self.char_end - self.char_start + 1);
 
-        format!("{lines}\n{pointer_padding}{pointers}")
+        format!("{lines}\n{pointers}")
     }
 }
 

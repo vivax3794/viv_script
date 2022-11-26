@@ -3,9 +3,8 @@ use std::collections::VecDeque;
 use super::{
     tokens::{Token, TokenValue},
     SourceLocation,
-    PResult
 };
-use crate::ast;
+use crate::{ast, CompilerResult};
 
 
 pub struct SyntaxParser {
@@ -27,7 +26,7 @@ impl SyntaxParser {
         self.tokens[0].clone().value
     }
 
-    fn expect(&mut self, token: TokenValue) -> PResult<()> {
+    fn expect(&mut self, token: TokenValue) -> CompilerResult<()> {
         let tk = self.advance();
         if tk.value != token {
             Err((
@@ -39,7 +38,7 @@ impl SyntaxParser {
         }
     }
 
-    fn parse_literal(&mut self) -> PResult<ast::Expression> {
+    fn parse_literal(&mut self) -> CompilerResult<ast::Expression> {
         let token = self.advance();
         let lit = match token.value {
             TokenValue::String(content) => ast::LiteralType::String(content),
@@ -57,11 +56,13 @@ impl SyntaxParser {
                         ))
                     }
                 }
-            }
+            },
+            // Lets just special case this since this is a convenient place to parse this
+            TokenValue::Identifier(name) => return Ok(ast::Expression::Var(token.source_location, name)),
             value => {
                 return Err((
                     token.source_location,
-                    format!("Expected String(_), Number(_) or Sign got {:?}", value),
+                    format!("Expected String(_), Number(_) or Minus got {:?}", value),
                 ))
             }
         };
@@ -69,12 +70,11 @@ impl SyntaxParser {
         Ok(ast::Expression::Literal(token.source_location, lit))
     }
 
-    fn parse_group(&mut self) -> PResult<ast::Expression> {
+    fn parse_group(&mut self) -> CompilerResult<ast::Expression> {
         match self.peek() {
             TokenValue::OpenParen => {
                 self.advance();
                 let exp = self.parse_expression()?;
-                let closing = self.advance();
                 self.expect(TokenValue::CloseParen)?;
                 Ok(exp)
             }
@@ -82,7 +82,7 @@ impl SyntaxParser {
         }
     }
 
-    fn parse_binary_expression(&mut self, level: usize) -> PResult<ast::Expression> {
+    fn parse_binary_expression(&mut self, level: usize) -> CompilerResult<ast::Expression> {
         let expressions: Vec<Vec<(TokenValue, ast::Operator)>> = vec![
             vec![
                 (TokenValue::Plus, ast::Operator::Add),
@@ -103,6 +103,7 @@ impl SyntaxParser {
             let next = self.peek();
             for (token, op) in expressions[level].iter() {
                 if &next == token {
+                    self.advance();
                     let right = self.parse_binary_expression(level)?;
                     left = ast::Expression::Binary(
                         SourceLocation::combine(left.location(), right.location()),
@@ -121,18 +122,18 @@ impl SyntaxParser {
         Ok(left)
     }
 
-    fn parse_expression(&mut self) -> PResult<ast::Expression> {
+    fn parse_expression(&mut self) -> CompilerResult<ast::Expression> {
         self.parse_binary_expression(0)
     }
 
-    fn parse_print(&mut self) -> PResult<ast::Statement> {
+    fn parse_print(&mut self) -> CompilerResult<ast::Statement> {
         self.advance(); // we assume this is only called once we know we have a print
         let expr = self.parse_expression()?;
         self.expect(TokenValue::Semicolon)?;
         Ok(ast::Statement::Print(expr))
     }
 
-    fn parse_assignment(&mut self) -> PResult<ast::Statement> {
+    fn parse_assignment(&mut self) -> CompilerResult<ast::Statement> {
         let name_tk = self.advance();
         let name = match name_tk.value {
             TokenValue::Identifier(name) => name,
@@ -150,11 +151,11 @@ impl SyntaxParser {
         ))
     }
 
-    fn parse_statement(&mut self) -> PResult<Option<ast::Statement>> {
+    fn parse_statement(&mut self) -> CompilerResult<Option<ast::Statement>> {
         match self.peek() {
             TokenValue::Print => self.parse_print().map(Some),
             TokenValue::Identifier(_) => self.parse_assignment().map(Some),
-            TokenValue::EOF => Ok(None),
+            TokenValue::Eof => Ok(None),
             _ => {
                 let token = self.advance();
                 Err((
@@ -165,7 +166,7 @@ impl SyntaxParser {
         }
     }
 
-    pub fn parse_file(&mut self) -> PResult<ast::CodeBody> {
+    pub fn parse_file(&mut self) -> CompilerResult<ast::CodeBody> {
         let mut statements = Vec::new();
 
         while let Some(stmt) = self.parse_statement()? {
