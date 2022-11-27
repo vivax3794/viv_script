@@ -102,6 +102,8 @@ impl Lexer {
                 '=' => self.emit_token(1, TokenValue::Eq),
                 '(' => self.emit_token(1, TokenValue::OpenParen),
                 ')' => self.emit_token(1, TokenValue::CloseParen),
+                '{' => self.emit_token(1, TokenValue::OpenBracket),
+                '}' => self.emit_token(1, TokenValue::CloseBracket),
                 char if char.is_ascii_digit() => {
                     let digits = char.to_string() + &self.take_while(|c| c.is_ascii_digit());
                     self.emit_token(digits.len(), TokenValue::Number(digits));
@@ -127,6 +129,7 @@ impl Lexer {
                     let word = char.to_string() + &self.take_while(|c| c.is_alphabetic() || c == '_');
                     match word.as_str() {
                         "print" => self.emit_token(5, TokenValue::Print),
+                        "fn" => self.emit_token(2, TokenValue::Fn),
                         _ => self.emit_token(word.len(), TokenValue::Identifier(word)),
                     }
                 }

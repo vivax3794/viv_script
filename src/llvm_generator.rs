@@ -23,6 +23,7 @@ pub struct Compiler<'ctx> {
     module: Module<'ctx>,
     builder: Builder<'ctx>,
     fpm: PassManager<Module<'ctx>>,
+
     function_context: Option<FunctionContext<'ctx>>,
 }
 
@@ -118,7 +119,8 @@ impl<'ctx> Compiler<'ctx> {
     fn free_if_needed(&self, value: BasicValueEnum, type_: TypeInformation) {
         if let TypeInformation::StringOwned = type_ {
             let free_function = self.module.get_function("free").unwrap();
-            self.builder.build_call(free_function, &[value.into()], "Free_Tmp_String");
+            self.builder
+                .build_call(free_function, &[value.into()], "Free_Tmp_String");
         }
     }
 
@@ -304,11 +306,7 @@ impl<'ctx> Compiler<'ctx> {
                         let memcpy_function = self.module.get_function("memcpy").unwrap();
                         self.builder.build_call(
                             memcpy_function,
-                            &[
-                                heap_pointer.into(),
-                                expr_value.into(),
-                                string_length.into(),
-                            ],
+                            &[heap_pointer.into(), expr_value.into(), string_length.into()],
                             "Memcpy",
                         );
 
@@ -332,8 +330,11 @@ impl<'ctx> Compiler<'ctx> {
             match type_ {
                 TypeInformation::Number => {}
                 TypeInformation::StringBorrow => {
-                    self.builder
-                        .build_call(free_function, &[pointer.as_basic_value_enum().into()], "Free_String");
+                    self.builder.build_call(
+                        free_function,
+                        &[pointer.as_basic_value_enum().into()],
+                        "Free_String",
+                    );
                 }
                 TypeInformation::StringOwned => unreachable!(),
             }
@@ -347,37 +348,56 @@ impl<'ctx> Compiler<'ctx> {
         }
     }
 
+    fn compile_function_definition(&self, name: &str) {
+        let return_type = self.context.void_type();
+        let arguments = [];
+
+        let function_type = return_type.fn_type(&arguments, false);
+        self.module.add_function(name, function_type, None);
+    }
+
+    fn compile_function(&mut self, name: &str, code: CodeBody, meta: FunctionMetadata) {
+        let function = self.module.get_function(name).unwrap();
+
+        let entry_block = self.context.append_basic_block(function, "entry");
+        self.builder.position_at_end(entry_block);
+
+        self.function_context.replace(FunctionContext {
+            var_types: meta.var_types,
+            var_pointers: HashMap::new(),
+        });
+        
+        self.compile_var_allocations();
+        for stmt in code.0.into_iter() {
+            self.compile_statement(stmt);
+        }
+        self.free_used_vars();
+
+        self.builder.build_return(None);
+    }
+
+    fn compile_toplevel_statement(&mut self, stmt: TopLevelStatement) {
+        match stmt {
+            TopLevelStatement::FunctionDefinition(name, body, meta) => self.compile_function(&name, body, meta)
+        }
+    }
+
     pub fn compile_code(
         &mut self,
-        code: CodeBody,
-        var_types: HashMap<String, TypeInformation>,
+        code: File,
         optimize: bool,
     ) {
         // Create clib functions
         self.compile_glibc_definitions();
 
-        // Create main function
-        let i32_type = self.context.i32_type();
-        let main_argument_types = [];
-        let main_function_type = i32_type.fn_type(&main_argument_types, false);
-        let main_function = self.module.add_function("main", main_function_type, None);
-
-        let entry_block = self.context.append_basic_block(main_function, "entry");
-        self.builder.position_at_end(entry_block);
-
-        self.function_context.replace(FunctionContext {
-            var_types,
-            var_pointers: HashMap::new(),
-        });
-
-        self.compile_var_allocations();
-        for stmt in code.0 {
-            self.compile_statement(stmt);
+        for stmt in code.0.iter() {
+            match stmt {
+                TopLevelStatement::FunctionDefinition(name, _, _) => self.compile_function_definition(name)
+            }
         }
-        self.free_used_vars();
-
-        self.builder
-            .build_return(Some(&i32_type.const_int(0, false)));
+        for stmt in code.0.into_iter() {
+            self.compile_toplevel_statement(stmt);
+        }
 
         if optimize {
             self.fpm.run_on(&self.module);

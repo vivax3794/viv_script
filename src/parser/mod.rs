@@ -7,7 +7,7 @@ pub use source_location::SourceLocation;
 
 use crate::CompilerResult;
 
-pub fn parse_file(code: &str) -> CompilerResult<crate::ast::CodeBody> {
+pub fn parse_file(code: &str) -> CompilerResult<crate::ast::File> {
     let mut lexer = lexer::Lexer::new(code);
     let tokens = lexer.parse_file()?;
 

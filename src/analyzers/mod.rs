@@ -1,11 +1,18 @@
 mod types_analyzer;
 
+use crate::{ast, types::TypeInformation, CompilerResult};
 use std::collections::HashMap;
-use crate::{ast, CompilerResult, types::TypeInformation};
 
 trait Analyzer {
-    fn visit_expression(&mut self, expr: &mut ast::Expression) -> CompilerResult<()>;
-    fn visit_stmt(&mut self, stmt: &mut ast::Statement) -> CompilerResult<()>;
+    fn visit_expression(&mut self, expr: &mut ast::Expression) -> CompilerResult<()> {
+        Ok(())
+    }
+    fn visit_stmt(&mut self, stmt: &mut ast::Statement) -> CompilerResult<()> {
+        Ok(())
+    }
+    fn visit_toplevel(&mut self, stmt: &mut ast::TopLevelStatement) -> CompilerResult<()> {
+        Ok(())
+    }
 
     fn _visit_expression(&mut self, expr: &mut ast::Expression) -> CompilerResult<()> {
         match expr {
@@ -29,18 +36,34 @@ trait Analyzer {
         self.visit_stmt(stmt)
     }
 
-    fn visit_code_block(&mut self, block: &mut ast::CodeBody) -> CompilerResult<()> {
-        for stmt in block.0.iter_mut() {
+    fn _visit_codebody(&mut self, body: &mut ast::CodeBody) -> CompilerResult<()> {
+        for stmt in body.0.iter_mut() {
             self._visit_stmt(stmt)?;
+        }
+
+        Ok(())
+    }
+
+    fn _visit_toplevel(&mut self, stmt: &mut ast::TopLevelStatement) -> CompilerResult<()> {
+        match stmt {
+            ast::TopLevelStatement::FunctionDefinition(_, body, _) => self._visit_codebody(body)?,
+        }
+
+        self.visit_toplevel(stmt)
+    }
+
+    fn visit_file(&mut self, file: &mut ast::File) -> CompilerResult<()> {
+        for stmt in file.0.iter_mut() {
+            self._visit_toplevel(stmt)?;
         }
 
         Ok(())
     }
 }
 
-pub fn apply_analyzer(code: &mut ast::CodeBody) -> CompilerResult<HashMap<String, TypeInformation>> {
+pub fn apply_analyzer(code: &mut ast::File) -> CompilerResult<()> {
     let mut type_analyzer = types_analyzer::TypeAnalyzer::new();
-    type_analyzer.visit_code_block(code)?;
+    type_analyzer.visit_file(code)?;
 
-    Ok(type_analyzer.var_types)
+    Ok(())
 }

@@ -6,7 +6,6 @@ use super::{
 };
 use crate::{ast, CompilerResult};
 
-
 pub struct SyntaxParser {
     tokens: VecDeque<Token>,
 }
@@ -56,9 +55,11 @@ impl SyntaxParser {
                         ))
                     }
                 }
-            },
+            }
             // Lets just special case this since this is a convenient place to parse this
-            TokenValue::Identifier(name) => return Ok(ast::Expression::Var(token.source_location.into(), name)),
+            TokenValue::Identifier(name) => {
+                return Ok(ast::Expression::Var(token.source_location.into(), name))
+            }
             value => {
                 return Err((
                     token.source_location,
@@ -155,24 +156,68 @@ impl SyntaxParser {
         match self.peek() {
             TokenValue::Print => self.parse_print().map(Some),
             TokenValue::Identifier(_) => self.parse_assignment().map(Some),
+            _ => Ok(None),
+        }
+    }
+
+    fn parse_codeblock(&mut self) -> CompilerResult<ast::CodeBody> {
+        self.expect(TokenValue::OpenBracket)?;
+
+        let mut statements = Vec::new();
+        while let Some(stmt) = self.parse_statement()? {
+            statements.push(stmt);
+        }
+
+        self.expect(TokenValue::CloseBracket)?;
+        Ok(ast::CodeBody(statements))
+    }
+
+    fn parse_function_definition(&mut self) -> CompilerResult<ast::TopLevelStatement> {
+        self.expect(TokenValue::Fn)?;
+
+        let name = self.advance();
+        let name = match name.value {
+            TokenValue::Identifier(name) => name,
+            _ => {
+                return Err((
+                    name.source_location,
+                    format!("expected name, got {:?}", name.value),
+                ))
+            }
+        };
+
+        self.expect(TokenValue::OpenParen)?;
+        self.expect(TokenValue::CloseParen)?;
+
+        let block = self.parse_codeblock()?;
+
+        Ok(ast::TopLevelStatement::FunctionDefinition(name, block, Default::default()))
+    }
+
+    fn parse_toplevel_statement(&mut self) -> CompilerResult<Option<ast::TopLevelStatement>> {
+        match self.peek() {
+            TokenValue::Fn => self.parse_function_definition().map(Some),
             TokenValue::Eof => Ok(None),
             _ => {
-                let token = self.advance();
+                let tk = self.advance();
                 Err((
-                    token.source_location,
-                    format!("Expected start of statement or EOF, got {:?}", token.value),
+                    tk.source_location,
+                    format!(
+                        "expected start of top level definition or end of file, got {:?}",
+                        tk.value
+                    ),
                 ))
             }
         }
     }
 
-    pub fn parse_file(&mut self) -> CompilerResult<ast::CodeBody> {
+    pub fn parse_file(&mut self) -> CompilerResult<ast::File> {
         let mut statements = Vec::new();
 
-        while let Some(stmt) = self.parse_statement()? {
+        while let Some(stmt) = self.parse_toplevel_statement()? {
             statements.push(stmt);
         }
 
-        Ok(ast::CodeBody(statements))
+        Ok(ast::File(statements))
     }
 }

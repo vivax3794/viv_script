@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{ast, types::TypeInformation, SourceLocation};
 
 pub struct TypeAnalyzer {
-    pub var_types: HashMap<String, TypeInformation>,
+    var_types: HashMap<String, TypeInformation>,
 }
 
 impl TypeAnalyzer {
@@ -92,6 +92,17 @@ impl super::Analyzer for TypeAnalyzer {
                     }
                 }
             },
+        }
+
+        Ok(())
+    }
+
+    fn visit_toplevel(&mut self, stmt: &mut ast::TopLevelStatement) -> crate::CompilerResult<()> {
+        match stmt {
+            ast::TopLevelStatement::FunctionDefinition(_, _, metadata) => {
+                metadata.var_types = self.var_types.clone();
+                self.var_types.clear();
+           },
         }
 
         Ok(())
