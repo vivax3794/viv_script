@@ -1,43 +1,21 @@
 use std::collections::HashMap;
 
 use inkwell_llvm12::{
-    attributes::{AttributeLoc},
-    basic_block::BasicBlock,
     builder::Builder,
     context::Context,
     module::Module,
     passes::PassManager,
-    values::{IntValue, PointerValue},
+    values::{BasicValue, BasicValueEnum, PointerValue},
     AddressSpace,
 };
 
-use std::cell::RefCell;
+use crate::types::TypeInformation;
 
 use super::ast::*;
 
-enum PointerOwnership {
-    Owned,
-    Borrow,
-}
-
-#[derive(Clone, Copy)]
-enum Var<'ctx> {
-    Number(PointerValue<'ctx>),
-    String(PointerValue<'ctx>),
-}
-
-enum Value<'ctx> {
-    Number(IntValue<'ctx>),
-    String(PointerValue<'ctx>, PointerOwnership),
-}
-
 struct FunctionContext<'ctx> {
-    /// We also need to modify this over time, but we want to keep the compiler as imutabal references only
-    vars: HashMap<String, Var<'ctx>>,
-    current_block: BasicBlock<'ctx>,
-    /// This is where stuff that should only run ONCE is defined,
-    /// Like stack allocations for used variables.
-    allocate_block: BasicBlock<'ctx>,
+    var_types: HashMap<String, TypeInformation>,
+    var_pointers: HashMap<String, PointerValue<'ctx>>,
 }
 
 pub struct Compiler<'ctx> {
@@ -45,7 +23,7 @@ pub struct Compiler<'ctx> {
     module: Module<'ctx>,
     builder: Builder<'ctx>,
     fpm: PassManager<Module<'ctx>>,
-    function_context: RefCell<Option<FunctionContext<'ctx>>>,
+    function_context: Option<FunctionContext<'ctx>>,
 }
 
 impl<'ctx> Compiler<'ctx> {
@@ -90,7 +68,7 @@ impl<'ctx> Compiler<'ctx> {
             module,
             builder,
             fpm,
-            function_context: RefCell::new(None),
+            function_context: None,
         }
     }
 
@@ -101,99 +79,97 @@ impl<'ctx> Compiler<'ctx> {
         let size_type = self.context.i64_type();
         let void_type = self.context.void_type();
 
-        let no_inline = self.context.create_string_attribute("noinline", "");
-
-        // printf
+        // int printf( const char *format, ... );
         let printf_argument_types = [i8_ptr_type.into()];
         let printf_function_type = i32_type.fn_type(&printf_argument_types, true);
         self.module
-            .add_function("printf", printf_function_type, None)
-            .add_attribute(AttributeLoc::Function, no_inline);
+            .add_function("printf", printf_function_type, None);
 
         // void* malloc( size_t size );
         let malloc_argument_types = [size_type.into()];
         let malloc_function_type = i8_ptr_type.fn_type(&malloc_argument_types, false);
         self.module
-            .add_function("malloc", malloc_function_type, None)
-            .add_attribute(AttributeLoc::Function, no_inline);
+            .add_function("malloc", malloc_function_type, None);
+
+        // void *realloc( void *ptr, size_t new_size );
+        let realloc_argument_types = [i8_ptr_type.into(), size_type.into()];
+        let realloc_function_type = i8_ptr_type.fn_type(&realloc_argument_types, false);
+        self.module
+            .add_function("realloc", realloc_function_type, None);
 
         // void free( void* ptr );
         let free_argument_types = [i8_ptr_type.into()];
         let free_function_type = void_type.fn_type(&free_argument_types, false);
-        self.module
-            .add_function("free", free_function_type, None)
-            .add_attribute(AttributeLoc::Function, no_inline);
+        self.module.add_function("free", free_function_type, None);
 
         // size_t strlen( const char *str );
         let strlen_argument_types = [i8_ptr_type.into()];
         let strlen_function_type = size_type.fn_type(&strlen_argument_types, false);
         self.module
-            .add_function("strlen", strlen_function_type, None)
-            .add_attribute(AttributeLoc::Function, no_inline);
-
-        // char *strcpy( char *dest, const char *src );
-        let strcpy_argument_types = [i8_ptr_type.into(), i8_ptr_type.into()];
-        let strcpy_function_type = i8_ptr_type.fn_type(&strcpy_argument_types, false);
-        self.module
-            .add_function("strcpy", strcpy_function_type, None)
-            .add_attribute(AttributeLoc::Function, no_inline);
+            .add_function("strlen", strlen_function_type, None);
 
         // void* memcpy( void *dest, const void *src, size_t count );
         let memcpy_argument_types = [i8_ptr_type.into(), i8_ptr_type.into(), size_type.into()];
         let memcpy_function_type = i8_ptr_type.fn_type(&memcpy_argument_types, false);
         self.module
-            .add_function("memcpy", memcpy_function_type, None)
-            .add_attribute(AttributeLoc::Function, no_inline);
+            .add_function("memcpy", memcpy_function_type, None);
     }
 
-    fn compile_literal(&self, lit: LiteralType) -> Value {
+    fn compile_literal(&self, lit: &LiteralType) -> BasicValueEnum {
         match lit {
             LiteralType::Number(value) => {
                 let i32_type = self.context.i32_type();
-                Value::Number(i32_type.const_int(value as u64, false))
+                i32_type
+                    .const_int(*value as u64, false)
+                    .as_basic_value_enum()
             }
             LiteralType::String(value) => {
                 let global_string =
-                    unsafe { self.builder.build_global_string(&value, "Literal_String") };
+                    unsafe { self.builder.build_global_string(value, "Literal_String") };
                 let ptr_to_string = global_string.as_pointer_value();
-                Value::String(ptr_to_string, PointerOwnership::Borrow)
+                ptr_to_string.as_basic_value_enum()
             }
         }
     }
 
-    fn compile_expression(&self, exp: Expression) -> Value {
+    fn compile_expression(&self, exp: &Expression) -> BasicValueEnum {
         match exp {
             Expression::Literal(_, lit) => self.compile_literal(lit),
             Expression::Binary(_, left, op, right) => {
-                let left = self.compile_expression(*left);
-                let right = self.compile_expression(*right);
+                // only numbers support binary
+                let left = self.compile_expression(left).into_int_value();
+                let right = self.compile_expression(right).into_int_value();
 
-                match (left, right) {
-                    (Value::Number(left), Value::Number(right)) => Value::Number(match op {
-                        Operator::Add => self.builder.build_int_add(left, right, "Number_Add"),
-                        Operator::Sub => self.builder.build_int_sub(left, right, "Number_Sub"),
-                        Operator::Mul => self.builder.build_int_mul(left, right, "Number_Mul"),
-                        Operator::Div => {
-                            self.builder.build_int_signed_div(left, right, "Number_Div")
-                        }
-                    }),
-                    _ => panic!("Can not these types of values!"),
+                match op {
+                    Operator::Add => self
+                        .builder
+                        .build_int_add(left, right, "Number_Add")
+                        .as_basic_value_enum(),
+                    Operator::Sub => self
+                        .builder
+                        .build_int_sub(left, right, "Number_Sub")
+                        .as_basic_value_enum(),
+                    Operator::Mul => self
+                        .builder
+                        .build_int_mul(left, right, "Number_Mul")
+                        .as_basic_value_enum(),
+                    Operator::Div => self
+                        .builder
+                        .build_int_signed_div(left, right, "Number_Div")
+                        .as_basic_value_enum(),
                 }
             }
-            Expression::Var(_, name) => {
-                let function_context = self.function_context.borrow();
-                let function_context = function_context.as_ref().unwrap();
-                let var = function_context.vars.get(&name).expect("Var not found");
+            Expression::Var(_, ref name) => {
+                let function_context = self.function_context.as_ref().unwrap();
+                let stack_ptr = function_context.var_pointers.get(name).unwrap();
 
-                match var {
-                    Var::Number(stack_ptr) => Value::Number(
-                        self.builder
-                            .build_load(*stack_ptr, "I32_Load")
-                            .into_int_value(),
-                    ),
-                    Var::String(stack_ptr) => {
-                        let heap_ptr = self.builder.build_load(*stack_ptr, "Str_Heap_Ptr");
-                        Value::String(heap_ptr.into_pointer_value(), PointerOwnership::Borrow)
+                match exp.metadata().type_information.unwrap() {
+                    TypeInformation::Number => self.builder.build_load(*stack_ptr, "I32_Load"),
+                    TypeInformation::StringBorrow => {
+                        self.builder.build_load(*stack_ptr, "Str_Heap_Ptr")
+                    }
+                    TypeInformation::StringOwned => {
+                        unreachable!("A var should always produce a Borrowed string")
                     }
                 }
             }
@@ -201,15 +177,12 @@ impl<'ctx> Compiler<'ctx> {
     }
 
     fn compile_print(&self, to_print: Expression) {
-        let value_hinted = self.compile_expression(to_print);
-        let value = match value_hinted {
-            Value::Number(val) => val.into(),
-            Value::String(val, _) => val.into(),
-        };
+        let value = self.compile_expression(&to_print);
 
-        let format_string = match value_hinted {
-            Value::Number(_) => "%d\n",
-            Value::String(_, _) => "%s\n",
+        let format_string = match to_print.metadata().type_information.unwrap() {
+            TypeInformation::Number => "%d\n",
+            TypeInformation::StringBorrow => "%s\n",
+            TypeInformation::StringOwned => "%s\n",
         };
 
         let printf_function = self.module.get_function("printf").unwrap();
@@ -226,188 +199,152 @@ impl<'ctx> Compiler<'ctx> {
                     "Format",
                 )
                 .into(),
-            value,
+            value.into(),
         ];
 
         self.builder
             .build_call(printf_function, &printf_arguments, "Print_Statement");
     }
 
-    fn compile_assignment_store_value(&self, var: &Var, value: Value) {
-        let malloc = self.module.get_function("malloc").unwrap();
-        let free = self.module.get_function("free").unwrap();
+    fn compile_var_allocations(&mut self) {
+        let function_context = self.function_context.as_mut().unwrap();
+        for name in function_context.var_types.keys() {
+            let type_ = function_context.var_types.get(name).unwrap();
 
-        match value {
-            Value::Number(value) => {
-                let stack_ptr = match var {
-                    Var::Number(ptr) => *ptr,
-                    _ => panic!("this variable is of type number"),
-                };
-                self.builder.build_store(stack_ptr, value);
-            }
-            Value::String(value, ownership) => {
-                let stack_ptr = match var {
-                    Var::String(ptr) => *ptr,
-                    _ => panic!("this variable is of type string"),
-                };
+            let pointer = match type_ {
+                TypeInformation::Number => {
+                    let i32_type = self.context.i32_type();
+                    self.builder.build_alloca(i32_type, "Stack_Pointer")
+                }
+                TypeInformation::StringBorrow => {
+                    let i8_ptr_type = self.context.i8_type().ptr_type(AddressSpace::Generic);
+                    let size_t = self.context.i64_type();
 
-                // used functions and types
-                let size_type = self.context.i64_type();
-                let strlen = self.module.get_function("strlen").unwrap();
-                let memcpy = self.module.get_function("memcpy").unwrap();
+                    let stack_pointer = self.builder.build_alloca(i8_ptr_type, "Stack_Pointer");
 
-                // Get owned pointer to string
-                let heap_ptr = match ownership {
-                    PointerOwnership::Owned => {
-                        // This value is not used anywhere else and we can safly take ownership of it
-                        value
-                    }
-                    PointerOwnership::Borrow => {
-                        // We dont own this string so we are gonna make a copy of it!
-                        let i8_ptr_type = self.context.i8_type().ptr_type(AddressSpace::Generic);
+                    let malloc_function = self.module.get_function("malloc").unwrap();
+                    let malloc_arguments = [size_t.const_int(0, false).into()];
+                    let heap_pointer =
+                        self.builder
+                            .build_call(malloc_function, &malloc_arguments, "Heap_Pointer");
 
-                        // get lenght
-                        let strln_arguments = [self
-                            .builder
-                            .build_pointer_cast(value, i8_ptr_type, "Str_Len_Arg")
-                            .into()];
-                        let lenght =
-                            self.builder
-                                .build_call(strlen, &strln_arguments, "String_Lenght");
-                        let lenght = lenght.try_as_basic_value().left().unwrap().into_int_value();
-                        // strlen does not include the null string 
-                        let lenght = self.builder.build_int_add(
-                            lenght,
-                            size_type.const_int(1, false),
-                            "String_Space",
-                        );
+                    self.builder.build_store(
+                        stack_pointer,
+                        heap_pointer.try_as_basic_value().unwrap_left(),
+                    );
 
-                        // Allocate space for string
-                        let malloc_arguments = [lenght.into()];
-                        let heap_ptr =
-                            self.builder
-                                .build_call(malloc, &malloc_arguments, "Heap_Pointer");
-                        let heap_ptr = heap_ptr
-                            .try_as_basic_value()
-                            .left()
-                            .unwrap()
-                            .into_pointer_value();
+                    stack_pointer
+                }
+                TypeInformation::StringOwned => unreachable!("Var is always a string borrowed."),
+            };
 
-                        // Copy string
-                        let memcpy_arguments = [
-                            self.builder
-                                .build_pointer_cast(heap_ptr, i8_ptr_type, "Strcpy_Dest")
-                                .into(),
-                            self.builder
-                                .build_pointer_cast(value, i8_ptr_type, "Strcpy_Src")
-                                .into(),
-                            lenght.into(),
-                        ];
-                        self.builder.build_call(memcpy, &memcpy_arguments, "Memcpy");
-
-                        heap_ptr
-                    }
-                };
-
-                // Free current pointer
-                // We did the above first incase it is a pointer to the same string (might happen for some reason if you did `x = x` :P)
-                // We could optimize that to a no-op, but if you are doing that you are asking to get bad code xD
-                let current_pointer = self
-                    .builder
-                    .build_load(stack_ptr, "Current_Str")
-                    .into_pointer_value();
-                let free_arguments = [current_pointer.into()];
-                self.builder
-                    .build_call(free, &free_arguments, "Free_Current_Str");
-
-                // Store new string
-                self.builder.build_store(stack_ptr, heap_ptr);
-            }
-        };
+            function_context.var_pointers.insert(name.clone(), pointer);
+        }
     }
 
-    fn compile_assignment(&self, name: String, exp: Expression) {
-        // The expression might need the function context
-        let value = self.compile_expression(exp);
+    fn compile_assignment(&mut self, name: String, expr: Expression) {
+        let function_context = self.function_context.as_ref().unwrap();
+        let type_ = function_context.var_types.get(&name).unwrap();
+        let pointer = function_context.var_pointers.get(&name).unwrap();
 
-        let mut function_context = self.function_context.borrow_mut();
-        let function_context = function_context.as_mut().unwrap();
+        let expr_value = self.compile_expression(&expr);
 
-        let var = match function_context.vars.get(&name) {
-            Some(var) => *var,
-            None => {
-                // We need to allocate this, but we cant do it at this position because reasons
-                self.builder
-                    .position_at_end(function_context.allocate_block);
-
-                let var = match value {
-                    Value::Number(_) => {
-                        // we dont need to preload it with anything
-                        Var::Number(
-                            self.builder
-                                .build_alloca(self.context.i32_type(), "I32_Stack_Pointer"),
-                        )
-                    }
-                    Value::String(_, _) => {
-                        // we need to malloc something because assigment always frees the current value
-                        let malloc = self.module.get_function("malloc").unwrap();
-                        let heap_ptr = self.builder.build_call(
-                            malloc,
-                            &[self.context.i64_type().const_int(0, false).into()],
-                            "Temp_Heap_Ptr",
-                        );
-                        let heap_ptr = heap_ptr
-                            .try_as_basic_value()
-                            .unwrap_left()
-                            .into_pointer_value();
-
-                        let stack_ptr = self.builder.build_alloca(
-                            self.context.i8_type().ptr_type(AddressSpace::Generic),
-                            "Str_Stack_Pointer",
-                        );
-
-                        self.builder.build_store(stack_ptr, heap_ptr);
-                        self.builder.position_at_end(function_context.current_block);
-
-                        Var::String(stack_ptr)
-                    }
-                };
-
-                self.builder.position_at_end(function_context.current_block);
-
-                function_context.vars.insert(name, var);
-                var
+        match type_ {
+            TypeInformation::Number => {
+                self.builder.build_store(*pointer, expr_value);
             }
-        };
-        self.compile_assignment_store_value(&var, value);
+            TypeInformation::StringBorrow => {
+                // Allocate space for new string
+                // check is we have a borrowed or owned string
+                let existing_heap_pointer = self.builder.build_load(*pointer, "Existing_String");
+
+                match expr.metadata().type_information.unwrap() {
+                    TypeInformation::StringOwned => {
+                        // We own it, lets just use it!
+                        // free existing string
+                        let free_function = self.module.get_function("free").unwrap();
+                        let free_arguments = [existing_heap_pointer.into()];
+                        self.builder
+                            .build_call(free_function, &free_arguments, "Free_String");
+
+                        // store new pointer
+                        self.builder.build_store(*pointer, expr_value);
+                    }
+                    TypeInformation::StringBorrow => {
+                        // get size of new string
+                        let strlen_function = self.module.get_function("strlen").unwrap();
+                        let string_length = self
+                            .builder
+                            .build_call(strlen_function, &[expr_value.into()], "String_Length")
+                            .try_as_basic_value()
+                            .unwrap_left();
+
+                        // Make sure allocated space is large enough
+                        let realloc_function = self.module.get_function("realloc").unwrap();
+                        let heap_pointer = self
+                            .builder
+                            .build_call(
+                                realloc_function,
+                                &[existing_heap_pointer.into(), string_length.into()],
+                                "Heap_Pointer",
+                            )
+                            .try_as_basic_value()
+                            .unwrap_left();
+
+                        // Copy string into heap
+                        let memcpy_function = self.module.get_function("memcpy").unwrap();
+                        self.builder.build_call(
+                            memcpy_function,
+                            &[
+                                heap_pointer.into(),
+                                expr_value.into(),
+                                string_length.into(),
+                            ],
+                            "Memcpy",
+                        );
+
+                        // Store new pointer
+                        self.builder.build_store(*pointer, heap_pointer);
+                    }
+                    _ => unreachable!("Should always be string type"),
+                }
+            }
+            TypeInformation::StringOwned => unreachable!(),
+        }
     }
 
     fn free_used_vars(&self) {
-        let mut function_context = self.function_context.borrow_mut();
-        let function_context = function_context.as_mut().unwrap();
+        let function_context = self.function_context.as_ref().unwrap();
+        for name in function_context.var_pointers.keys() {
+            let type_ = function_context.var_types.get(name).unwrap();
+            let pointer = function_context.var_pointers.get(name).unwrap();
 
-        let free = self.module.get_function("free").unwrap();
-
-        for var in function_context.vars.values() {
-            match var {
-                Var::Number(_) => (),
-                Var::String(stack_ptr) => {
-                    let heap_ptr = self.builder.build_load(*stack_ptr, "Str_Heap_Ptr");
-                    let free_arguments = [heap_ptr.into()];
-                    self.builder.build_call(free, &free_arguments, "Free_Str");
+            match type_ {
+                TypeInformation::Number => {}
+                TypeInformation::StringBorrow => {
+                    let free_function = self.module.get_function("free").unwrap();
+                    let free_arguments = [pointer.as_basic_value_enum().into()];
+                    self.builder
+                        .build_call(free_function, &free_arguments, "Free_String");
                 }
+                TypeInformation::StringOwned => unreachable!(),
             }
         }
     }
 
-    fn compile_statement(&self, stmt: Statement) {
+    fn compile_statement(&mut self, stmt: Statement) {
         match stmt {
             Statement::Print(expr) => self.compile_print(expr),
             Statement::Assignment(_, name, exp) => self.compile_assignment(name, exp),
         }
     }
 
-    pub fn compile_code(&self, code: CodeBody, optimize: bool) {
+    pub fn compile_code(
+        &mut self,
+        code: CodeBody,
+        var_types: HashMap<String, TypeInformation>,
+        optimize: bool,
+    ) {
         // Create clib functions
         self.compile_glibc_definitions();
 
@@ -418,29 +355,21 @@ impl<'ctx> Compiler<'ctx> {
         let main_function = self.module.add_function("main", main_function_type, None);
 
         let entry_block = self.context.append_basic_block(main_function, "entry");
-        let code_block = self.context.append_basic_block(main_function, "code");
-        self.builder.position_at_end(code_block);
+        self.builder.position_at_end(entry_block);
 
-        self.function_context.replace(Some(FunctionContext {
-            vars: HashMap::new(),
-            allocate_block: entry_block,
-            current_block: code_block,
-        }));
+        self.function_context.replace(FunctionContext {
+            var_types,
+            var_pointers: HashMap::new(),
+        });
 
+        self.compile_var_allocations();
         for stmt in code.0 {
             self.compile_statement(stmt);
         }
-
         self.free_used_vars();
 
         self.builder
             .build_return(Some(&i32_type.const_int(0, false)));
-
-        // We need to add this at the end of the block
-        // We could get away with not having two of the block if we could easialy add to the start
-        // but the IR optimizer will optimize this away anyway :D 
-        self.builder.position_at_end(entry_block);
-        self.builder.build_unconditional_branch(code_block);
 
         if optimize {
             self.fpm.run_on(&self.module);

@@ -1,4 +1,4 @@
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Copy)]
 pub struct SourceLocation {
     pub line_start: usize,
     pub line_end: usize,
@@ -21,7 +21,7 @@ impl SourceLocation {
             line_start: usize::min(a.line_start, b.line_start),
             line_end: usize::max(a.line_end, b.line_end),
             char_start: usize::min(a.char_start, b.char_start),
-            char_end: usize::max(a.char_end, b.char_end)
+            char_end: usize::max(a.char_end, b.char_end),
         }
     }
 
@@ -43,12 +43,12 @@ impl SourceLocation {
             .max()
             .unwrap();
         let pointer_padding = max_line_number_width + " | ".len() + self.char_start - 1;
-        let pointers = " ".repeat(pointer_padding) + &"^".repeat(self.char_end - self.char_start + 1);
+        let pointers =
+            " ".repeat(pointer_padding) + &"^".repeat(self.char_end - self.char_start + 1);
 
         format!("{lines}\n{pointers}")
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -57,7 +57,15 @@ mod tests {
     #[test]
     fn create() {
         let location = SourceLocation::new(1, 2, 3);
-        assert_eq!(location, SourceLocation { line_start: 1, line_end: 1, char_start: 2, char_end: 3});
+        assert_eq!(
+            location,
+            SourceLocation {
+                line_start: 1,
+                line_end: 1,
+                char_start: 2,
+                char_end: 3
+            }
+        );
     }
 
     #[test]
@@ -66,6 +74,14 @@ mod tests {
         let location_b = SourceLocation::new(2, 1, 3);
         let location_ab = SourceLocation::combine(&location_a, &location_b);
 
-        assert_eq!(location_ab, SourceLocation {line_start: 1, line_end: 2, char_start: 1, char_end: 6});
+        assert_eq!(
+            location_ab,
+            SourceLocation {
+                line_start: 1,
+                line_end: 2,
+                char_start: 1,
+                char_end: 6
+            }
+        );
     }
 }

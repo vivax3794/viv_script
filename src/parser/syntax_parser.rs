@@ -58,7 +58,7 @@ impl SyntaxParser {
                 }
             },
             // Lets just special case this since this is a convenient place to parse this
-            TokenValue::Identifier(name) => return Ok(ast::Expression::Var(token.source_location, name)),
+            TokenValue::Identifier(name) => return Ok(ast::Expression::Var(token.source_location.into(), name)),
             value => {
                 return Err((
                     token.source_location,
@@ -67,7 +67,7 @@ impl SyntaxParser {
             }
         };
 
-        Ok(ast::Expression::Literal(token.source_location, lit))
+        Ok(ast::Expression::Literal(token.source_location.into(), lit))
     }
 
     fn parse_group(&mut self) -> CompilerResult<ast::Expression> {
@@ -106,7 +106,7 @@ impl SyntaxParser {
                     self.advance();
                     let right = self.parse_binary_expression(level)?;
                     left = ast::Expression::Binary(
-                        SourceLocation::combine(left.location(), right.location()),
+                        SourceLocation::combine(left.location(), right.location()).into(),
                         Box::new(left),
                         *op,
                         Box::new(right),

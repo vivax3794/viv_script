@@ -1,10 +1,13 @@
 use std::path::PathBuf;
+pub use parser::SourceLocation;
+
+mod types;
+mod analyzers;
 
 mod ast;
 mod llvm_generator;
 mod parser;
 
-pub use parser::SourceLocation;
 type CompilerResult<T> = Result<T, (SourceLocation, String)>;
 
 pub fn report_error(code: &str, err: (SourceLocation, String)) {
@@ -13,12 +16,14 @@ pub fn report_error(code: &str, err: (SourceLocation, String)) {
 }
 
 pub fn compile_to_ir(name: &str, code: &str, output: &str, optimize: bool) -> CompilerResult<()> {
-    let ast = parser::parse_file(code)?;
+    let mut ast = parser::parse_file(code)?;
+
+    let var_types = analyzers::apply_analyzer(&mut ast)?;
 
     let ctx = llvm_generator::Compiler::create_context();
-    let compiler = llvm_generator::Compiler::new(name, &ctx);
+    let mut compiler = llvm_generator::Compiler::new(name, &ctx);
 
-    compiler.compile_code(ast, optimize);
+    compiler.compile_code(ast, var_types, optimize);
     compiler.save_in(output);
 
     Ok(())
