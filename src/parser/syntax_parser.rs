@@ -104,7 +104,7 @@ impl SyntaxParser {
             for (token, op) in expressions[level].iter() {
                 if &next == token {
                     self.advance();
-                    let right = self.parse_binary_expression(level)?;
+                    let right = self.parse_binary_expression(level + 1)?;
                     left = ast::Expression::Binary(
                         SourceLocation::combine(left.location(), right.location()).into(),
                         Box::new(left),
