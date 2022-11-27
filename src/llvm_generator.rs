@@ -115,6 +115,13 @@ impl<'ctx> Compiler<'ctx> {
             .add_function("memcpy", memcpy_function_type, None);
     }
 
+    fn free_if_needed(&self, value: BasicValueEnum, type_: TypeInformation) {
+        if let TypeInformation::StringOwned = type_ {
+            let free_function = self.module.get_function("free").unwrap();
+            self.builder.build_call(free_function, &[value.into()], "Free_Tmp_String");
+        }
+    }
+
     fn compile_literal(&self, lit: &LiteralType) -> BasicValueEnum {
         match lit {
             LiteralType::Number(value) => {
@@ -204,6 +211,8 @@ impl<'ctx> Compiler<'ctx> {
 
         self.builder
             .build_call(printf_function, &printf_arguments, "Print_Statement");
+
+        self.free_if_needed(value, to_print.metadata().type_information.unwrap());
     }
 
     fn compile_var_allocations(&mut self) {
@@ -315,6 +324,7 @@ impl<'ctx> Compiler<'ctx> {
 
     fn free_used_vars(&self) {
         let function_context = self.function_context.as_ref().unwrap();
+        let free_function = self.module.get_function("free").unwrap();
         for name in function_context.var_pointers.keys() {
             let type_ = function_context.var_types.get(name).unwrap();
             let pointer = function_context.var_pointers.get(name).unwrap();
@@ -322,10 +332,8 @@ impl<'ctx> Compiler<'ctx> {
             match type_ {
                 TypeInformation::Number => {}
                 TypeInformation::StringBorrow => {
-                    let free_function = self.module.get_function("free").unwrap();
-                    let free_arguments = [pointer.as_basic_value_enum().into()];
                     self.builder
-                        .build_call(free_function, &free_arguments, "Free_String");
+                        .build_call(free_function, &[pointer.as_basic_value_enum().into()], "Free_String");
                 }
                 TypeInformation::StringOwned => unreachable!(),
             }
