@@ -4,12 +4,14 @@ use crate::{ast, types::TypeInformation, SourceLocation};
 
 pub struct TypeAnalyzer {
     var_types: HashMap<String, TypeInformation>,
+    return_type: TypeInformation,
 }
 
 impl TypeAnalyzer {
     pub fn new() -> Self {
         Self {
             var_types: HashMap::new(),
+            return_type: TypeInformation::Number, // Temp value,
         }
     }
 
@@ -92,6 +94,32 @@ impl super::Analyzer for TypeAnalyzer {
                     }
                 }
             },
+            ast::Statement::Return(expr) => {
+                if self.return_type != expr.metadata().type_information.unwrap() {
+                    return Err((
+                        *expr.location(),
+                        format!(
+                            "expected {:?}, got {:?}",
+                            self.return_type,
+                            expr.metadata().type_information.unwrap()
+                        ),
+                    ));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn pre_visit_toplevel(
+        &mut self,
+        stmt: &mut ast::TopLevelStatement,
+    ) -> crate::CompilerResult<()> {
+        match stmt {
+            ast::TopLevelStatement::FunctionDefinition { meta, .. } => {
+                self.var_types.clear();
+                self.return_type = meta.return_type.unwrap();
+            }
         }
 
         Ok(())
@@ -99,10 +127,9 @@ impl super::Analyzer for TypeAnalyzer {
 
     fn visit_toplevel(&mut self, stmt: &mut ast::TopLevelStatement) -> crate::CompilerResult<()> {
         match stmt {
-            ast::TopLevelStatement::FunctionDefinition(_, _, metadata) => {
-                metadata.var_types = self.var_types.clone();
-                self.var_types.clear();
-           },
+            ast::TopLevelStatement::FunctionDefinition { meta, .. } => {
+                meta.var_types = self.var_types.clone();
+            }
         }
 
         Ok(())

@@ -86,7 +86,16 @@ impl Lexer {
             match char {
                 ';' => self.emit_token(1, TokenValue::Semicolon),
                 '+' => self.emit_token(1, TokenValue::Plus),
-                '-' => self.emit_token(1, TokenValue::Minus),
+                '-' => {
+                    match self.peek() {
+                        Some('>') => {
+                            self.advance();
+                            self.emit_token(2, TokenValue::Arrow);
+                        },
+                        Some(_) => self.emit_token(1, TokenValue::Minus),
+                        None => {}
+                    }
+                },
                 '*' => self.emit_token(1, TokenValue::Star),
                 '/' => {
                     match self.peek() {
@@ -129,7 +138,8 @@ impl Lexer {
                     let word = char.to_string() + &self.take_while(|c| c.is_alphabetic() || c == '_');
                     match word.as_str() {
                         "print" => self.emit_token(5, TokenValue::Print),
-                        "fn" => self.emit_token(2, TokenValue::Fn),
+                        "fn" =>  self.emit_token(2, TokenValue::Fn),
+                        "return" => self.emit_token(6, TokenValue::Return),
                         _ => self.emit_token(word.len(), TokenValue::Identifier(word)),
                     }
                 }

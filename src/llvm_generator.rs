@@ -1,10 +1,11 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, string};
 
 use inkwell_llvm12::{
     builder::Builder,
     context::Context,
     module::Module,
     passes::PassManager,
+    types::{BasicType, BasicTypeEnum},
     values::{BasicValue, BasicValueEnum, PointerValue},
     AddressSpace,
 };
@@ -116,6 +117,22 @@ impl<'ctx> Compiler<'ctx> {
             .add_function("memcpy", memcpy_function_type, None);
     }
 
+    fn get_type_for(&self, type_: TypeInformation) -> BasicTypeEnum<'ctx> {
+        match type_ {
+            TypeInformation::Number => self.context.i32_type().as_basic_type_enum(),
+            TypeInformation::StringOwned => self
+                .context
+                .i8_type()
+                .ptr_type(AddressSpace::Generic)
+                .as_basic_type_enum(),
+            TypeInformation::StringBorrow => self
+                .context
+                .i8_type()
+                .ptr_type(AddressSpace::Generic)
+                .as_basic_type_enum(),
+        }
+    }
+
     fn free_if_needed(&self, value: BasicValueEnum, type_: TypeInformation) {
         if let TypeInformation::StringOwned = type_ {
             let free_function = self.module.get_function("free").unwrap();
@@ -124,7 +141,29 @@ impl<'ctx> Compiler<'ctx> {
         }
     }
 
-    fn compile_literal(&self, lit: &LiteralType) -> BasicValueEnum {
+    fn get_owned_string(&self, value: BasicValueEnum<'ctx>) -> BasicValueEnum<'ctx> {
+        let strlen = self.module.get_function("strlen").unwrap();
+        let string_length = self
+            .builder
+            .build_call(strlen, &[value.into()], "String_Len")
+            .try_as_basic_value()
+            .unwrap_left();
+
+        let malloc = self.module.get_function("malloc").unwrap();
+        let heap_pointer = self
+            .builder
+            .build_call(malloc, &[string_length.into()], "Heap_Pointer")
+            .try_as_basic_value()
+            .unwrap_left();
+
+        let memcpy = self.module.get_function("memcpy").unwrap();
+        self.builder
+            .build_call(memcpy, &[heap_pointer.into(), value.into()], "Malloc");
+        
+        heap_pointer
+    }
+
+    fn compile_literal(&self, lit: &LiteralType) -> BasicValueEnum<'ctx> {
         match lit {
             LiteralType::Number(value) => {
                 let i32_type = self.context.i32_type();
@@ -141,7 +180,7 @@ impl<'ctx> Compiler<'ctx> {
         }
     }
 
-    fn compile_expression(&self, exp: &Expression) -> BasicValueEnum {
+    fn compile_expression(&self, exp: &Expression) -> BasicValueEnum<'ctx> {
         match exp {
             Expression::Literal(_, lit) => self.compile_literal(lit),
             Expression::Binary(_, left, op, right) => {
@@ -341,15 +380,34 @@ impl<'ctx> Compiler<'ctx> {
         }
     }
 
+    fn compile_return(&self, expr: Expression) {
+        let type_ = expr.metadata().type_information.unwrap();
+        let value = self.compile_expression(&expr);
+
+        match type_ {
+            TypeInformation::Number => {
+                self.builder.build_return(Some(&value));
+            }
+            TypeInformation::StringOwned => {
+                self.builder.build_return(Some(&value));
+            },
+            TypeInformation::StringBorrow => {
+                let value = self.get_owned_string(value);
+                self.builder.build_return(Some(&value));
+            }
+        }
+    }
+
     fn compile_statement(&mut self, stmt: Statement) {
         match stmt {
             Statement::Print(expr) => self.compile_print(expr),
             Statement::Assignment(_, name, exp) => self.compile_assignment(name, exp),
+            Statement::Return(expr) => self.compile_return(expr),
         }
     }
 
-    fn compile_function_definition(&self, name: &str) {
-        let return_type = self.context.void_type();
+    fn compile_function_definition(&self, name: &str, meta: &FunctionMetadata) {
+        let return_type = self.get_type_for(meta.return_type.unwrap());
         let arguments = [];
 
         let function_type = return_type.fn_type(&arguments, false);
@@ -366,33 +424,31 @@ impl<'ctx> Compiler<'ctx> {
             var_types: meta.var_types,
             var_pointers: HashMap::new(),
         });
-        
+
         self.compile_var_allocations();
         for stmt in code.0.into_iter() {
             self.compile_statement(stmt);
         }
         self.free_used_vars();
-
-        self.builder.build_return(None);
     }
 
     fn compile_toplevel_statement(&mut self, stmt: TopLevelStatement) {
         match stmt {
-            TopLevelStatement::FunctionDefinition(name, body, meta) => self.compile_function(&name, body, meta)
+            TopLevelStatement::FunctionDefinition {
+                name, body, meta, ..
+            } => self.compile_function(&name, body, meta),
         }
     }
 
-    pub fn compile_code(
-        &mut self,
-        code: File,
-        optimize: bool,
-    ) {
+    pub fn compile_code(&mut self, code: File, optimize: bool) {
         // Create clib functions
         self.compile_glibc_definitions();
 
         for stmt in code.0.iter() {
             match stmt {
-                TopLevelStatement::FunctionDefinition(name, _, _) => self.compile_function_definition(name)
+                TopLevelStatement::FunctionDefinition { name, meta, .. } => {
+                    self.compile_function_definition(name, meta)
+                }
             }
         }
         for stmt in code.0.into_iter() {

@@ -10,6 +10,7 @@ pub enum TokenValue {
     // KEYWORDS
     Print,
     Fn,
+    Return,
     
     // SYMBOLS
     Semicolon,
@@ -22,6 +23,7 @@ pub enum TokenValue {
     CloseParen,
     OpenBracket,
     CloseBracket,
+    Arrow,
     Eof
 }
 

@@ -7,12 +7,13 @@ pub struct File(pub Vec<TopLevelStatement>);
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TopLevelStatement {
-    FunctionDefinition(String, CodeBody, FunctionMetadata),
+    FunctionDefinition { name: String, body: CodeBody, return_type: String, return_type_location: SourceLocation, meta: FunctionMetadata },
 }
 
 #[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct FunctionMetadata {
-    pub var_types:  HashMap<String, TypeInformation>
+    pub var_types:  HashMap<String, TypeInformation>,
+    pub return_type: Option<TypeInformation>
 }
 
 /// A code body is a collection of statements
@@ -27,6 +28,7 @@ pub enum Statement {
     Print(Expression),
     /// An assignment stores the value of a expression in the provided name
     Assignment(SourceLocation, String, Expression),
+    Return(Expression),
 }
 
 // An expression is the building block of the language. it usually does stuff.

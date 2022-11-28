@@ -152,10 +152,18 @@ impl SyntaxParser {
         ))
     }
 
+    fn parse_return(&mut self) -> CompilerResult<ast::Statement> {
+        self.advance();
+        let expr = self.parse_expression()?;
+        self.expect(TokenValue::Semicolon)?;
+        Ok(ast::Statement::Return(expr))
+    }
+
     fn parse_statement(&mut self) -> CompilerResult<Option<ast::Statement>> {
         match self.peek() {
             TokenValue::Print => self.parse_print().map(Some),
             TokenValue::Identifier(_) => self.parse_assignment().map(Some),
+            TokenValue::Return => self.parse_return().map(Some),
             _ => Ok(None),
         }
     }
@@ -189,9 +197,28 @@ impl SyntaxParser {
         self.expect(TokenValue::OpenParen)?;
         self.expect(TokenValue::CloseParen)?;
 
+        self.expect(TokenValue::Arrow)?;
+
+        let return_type_tk = self.advance();
+        let return_type = match return_type_tk.value {
+            TokenValue::Identifier(name) => name,
+            _ => {
+                return Err((
+                    return_type_tk.source_location,
+                    format!("expected name, got {:?}", return_type_tk.value),
+                ))
+            }
+        };
+
         let block = self.parse_codeblock()?;
 
-        Ok(ast::TopLevelStatement::FunctionDefinition(name, block, Default::default()))
+        Ok(ast::TopLevelStatement::FunctionDefinition {
+            name,
+            body: block,
+            return_type,
+            return_type_location: return_type_tk.source_location,
+            meta: Default::default(),
+        })
     }
 
     fn parse_toplevel_statement(&mut self) -> CompilerResult<Option<ast::TopLevelStatement>> {

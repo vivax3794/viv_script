@@ -1,16 +1,19 @@
+mod definition_analyzer;
 mod types_analyzer;
 
-use crate::{ast, types::TypeInformation, CompilerResult};
-use std::collections::HashMap;
+use crate::{ast, CompilerResult};
 
 trait Analyzer {
-    fn visit_expression(&mut self, expr: &mut ast::Expression) -> CompilerResult<()> {
+    fn visit_expression(&mut self, _expr: &mut ast::Expression) -> CompilerResult<()> {
         Ok(())
     }
-    fn visit_stmt(&mut self, stmt: &mut ast::Statement) -> CompilerResult<()> {
+    fn visit_stmt(&mut self, _stmt: &mut ast::Statement) -> CompilerResult<()> {
         Ok(())
     }
-    fn visit_toplevel(&mut self, stmt: &mut ast::TopLevelStatement) -> CompilerResult<()> {
+    fn visit_toplevel(&mut self, _stmt: &mut ast::TopLevelStatement) -> CompilerResult<()> {
+        Ok(())
+    }
+    fn pre_visit_toplevel(&mut self, _stmt: &mut ast::TopLevelStatement) -> CompilerResult<()> {
         Ok(())
     }
 
@@ -31,6 +34,7 @@ trait Analyzer {
         match stmt {
             ast::Statement::Print(expr) => self._visit_expression(expr)?,
             ast::Statement::Assignment(_, _, expr) => self._visit_expression(expr)?,
+            ast::Statement::Return(expr) => self._visit_expression(expr)?,
         }
 
         self.visit_stmt(stmt)
@@ -45,8 +49,10 @@ trait Analyzer {
     }
 
     fn _visit_toplevel(&mut self, stmt: &mut ast::TopLevelStatement) -> CompilerResult<()> {
+        self.pre_visit_toplevel(stmt)?;
+
         match stmt {
-            ast::TopLevelStatement::FunctionDefinition(_, body, _) => self._visit_codebody(body)?,
+            ast::TopLevelStatement::FunctionDefinition { body, ..} => self._visit_codebody(body)?,
         }
 
         self.visit_toplevel(stmt)
@@ -63,6 +69,9 @@ trait Analyzer {
 
 pub fn apply_analyzer(code: &mut ast::File) -> CompilerResult<()> {
     let mut type_analyzer = types_analyzer::TypeAnalyzer::new();
+    let mut definition_analyzer = definition_analyzer::DefinitionAnalyzer::new();
+
+    definition_analyzer.visit_file(code)?;
     type_analyzer.visit_file(code)?;
 
     Ok(())
