@@ -8,7 +8,7 @@ pub struct Lexer {
     code: VecDeque<char>,
 
     current_line: usize,
-    current_char_on_line: usize,
+    current_colum: usize,
 
     tokens: Vec<Token>,
 }
@@ -18,7 +18,7 @@ impl Lexer {
         Self {
             code: code.chars().collect(),
             current_line: 1,
-            current_char_on_line: 0,
+            current_colum: 0,
             tokens: Vec::with_capacity(code.len() / 2),
         }
     }
@@ -26,12 +26,12 @@ impl Lexer {
     fn advance(&mut self) -> Option<char> {
         let char = self.code.pop_front();
 
-        self.current_char_on_line += 1;
+        self.current_colum += 1;
 
         if let Some(c) = char {
             if c == '\n' {
                 self.current_line += 1;
-                self.current_char_on_line = 0;
+                self.current_colum = 0;
             }
         }
 
@@ -70,8 +70,8 @@ impl Lexer {
     fn emit_token(&mut self, len: usize, value: TokenValue) {
         let location = SourceLocation::new(
             self.current_line,
-            self.current_char_on_line - len + 1,
-            self.current_char_on_line,
+            self.current_colum - len + 1,
+            self.current_colum,
         );
         self.tokens.push(Token {
             value,
@@ -104,11 +104,11 @@ impl Lexer {
                             self.advance();
                             self.take_while(|c| c != '\n');
                         },
-                        Some(_) => self.emit_token(1, TokenValue::FSlash),
+                        Some(_) => self.emit_token(1, TokenValue::ForwardSlash),
                         None => {},
                     }
                 },
-                '=' => self.emit_token(1, TokenValue::Eq),
+                '=' => self.emit_token(1, TokenValue::Equal),
                 '(' => self.emit_token(1, TokenValue::OpenParen),
                 ')' => self.emit_token(1, TokenValue::CloseParen),
                 '{' => self.emit_token(1, TokenValue::OpenBracket),
@@ -124,8 +124,8 @@ impl Lexer {
                         error = Err((
                             SourceLocation::new(
                                 self.current_line,
-                                self.current_char_on_line,
-                                self.current_char_on_line,
+                                self.current_colum,
+                                self.current_colum,
                             ),
                             "Unclosed String".to_string(),
                         ));
@@ -147,8 +147,8 @@ impl Lexer {
                     error = Err((
                         SourceLocation::new(
                             self.current_line,
-                            self.current_char_on_line,
-                            self.current_char_on_line,
+                            self.current_colum,
+                            self.current_colum,
                         ),
                         format!("invalid char {char}"),
                     ));
@@ -159,7 +159,7 @@ impl Lexer {
             self.eat_whitespace();
         }
 
-        self.emit_token(1, TokenValue::Eof);
+        self.emit_token(1, TokenValue::EndOfFile);
 
         error.map(|_| self.tokens.clone())
     }
@@ -190,10 +190,10 @@ mod tests {
                 TokenValue::Plus,
                 TokenValue::Minus,
                 TokenValue::Star,
-                TokenValue::FSlash,
-                TokenValue::Eq,
+                TokenValue::ForwardSlash,
+                TokenValue::Equal,
                 TokenValue::Semicolon,
-                TokenValue::Eof
+                TokenValue::EndOfFile
             ]
         )
     }
@@ -205,7 +205,7 @@ mod tests {
 
         assert_eq!(
             tokens,
-            vec![TokenValue::Number("1234".to_string()), TokenValue::Eof]
+            vec![TokenValue::Number("1234".to_string()), TokenValue::EndOfFile]
         )
     }
 
@@ -216,7 +216,7 @@ mod tests {
 
         assert_eq!(
             tokens,
-            vec![TokenValue::String("hello".to_string()), TokenValue::Eof]
+            vec![TokenValue::String("hello".to_string()), TokenValue::EndOfFile]
         )
     }
 
@@ -225,7 +225,7 @@ mod tests {
         let mut lexer = Lexer::new("print");
         let tokens = parse_file(&mut lexer);
 
-        assert_eq!(tokens, vec![TokenValue::Print, TokenValue::Eof])
+        assert_eq!(tokens, vec![TokenValue::Print, TokenValue::EndOfFile])
     }
 
     #[test]
@@ -235,7 +235,7 @@ mod tests {
 
         assert_eq!(
             tokens,
-            vec![TokenValue::Identifier("hello".to_string()), TokenValue::Eof]
+            vec![TokenValue::Identifier("hello".to_string()), TokenValue::EndOfFile]
         )
     }
 }

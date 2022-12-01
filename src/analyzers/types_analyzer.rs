@@ -17,16 +17,16 @@ impl TypeAnalyzer {
 
     fn analyze_binary(
         &mut self,
-        meta: &mut ast::ExpressionMetadata,
-        left: &mut ast::Expression,
-        right: &mut ast::Expression,
+        metadata: &mut ast::ExpressionMetadata,
+        left_expression: &mut ast::Expression,
+        right_expression: &mut ast::Expression,
     ) -> crate::CompilerResult<()> {
-        let left_type = left.metadata().type_information.unwrap();
-        let right_type = right.metadata().type_information.unwrap();
+        let left_type = left_expression.metadata().type_information.unwrap();
+        let right_type = right_expression.metadata().type_information.unwrap();
 
         if left_type != right_type {
             return Err((
-                SourceLocation::combine(left.location(), right.location()),
+                SourceLocation::combine(left_expression.location(), right_expression.location()),
                 format!(
                     "Expected left and right to have same type, got {:?} and {:?}",
                     left_type, right_type
@@ -36,12 +36,12 @@ impl TypeAnalyzer {
 
         if left_type != TypeInformation::Number {
             return Err((
-                SourceLocation::combine(left.location(), right.location()),
+                SourceLocation::combine(left_expression.location(), right_expression.location()),
                 format!("can only do operations on numbers, got {:?}", left_type),
             ));
         }
 
-        meta.type_information = Some(TypeInformation::Number);
+        metadata.type_information = Some(TypeInformation::Number);
 
         Ok(())
     }
@@ -50,18 +50,18 @@ impl TypeAnalyzer {
 impl super::Analyzer for TypeAnalyzer {
     fn visit_expression(&mut self, expr: &mut crate::ast::Expression) -> crate::CompilerResult<()> {
         match expr {
-            ast::Expression::Literal(meta, lit) => {
-                meta.type_information = Some(match lit {
+            ast::Expression::Literal(metadata, literal) => {
+                metadata.type_information = Some(match literal {
                     ast::LiteralType::Number(_) => TypeInformation::Number,
                     ast::LiteralType::String(_) => TypeInformation::StringBorrow,
                 })
             }
-            ast::Expression::Binary(meta, left, _, right) => {
-                self.analyze_binary(meta, left, right)?;
+            ast::Expression::Binary { metadata, left, operator: _, right } => {
+                self.analyze_binary(metadata, left, right)?;
             }
-            ast::Expression::Var(meta, name) => match self.var_types.get(name) {
-                Some(type_) => meta.type_information = Some(*type_),
-                None => return Err((meta.location, format!("Name {} not defined", name))),
+            ast::Expression::Var(metadata, var_name) => match self.var_types.get(var_name) {
+                Some(type_) => metadata.type_information = Some(*type_),
+                None => return Err((metadata.location, format!("Name {} not defined", var_name))),
             },
         }
 
@@ -71,37 +71,38 @@ impl super::Analyzer for TypeAnalyzer {
     fn visit_stmt(&mut self, stmt: &mut ast::Statement) -> crate::CompilerResult<()> {
         match stmt {
             ast::Statement::Print(_) => {}
-            ast::Statement::Assignment(_, name, expr) => match self.var_types.get(name) {
+            ast::Statement::Assignment { var_name, expression, .. } => match self.var_types.get(var_name) {
                 None => {
-                    let type_ = expr.metadata().type_information.unwrap();
-                    self.var_types.insert(name.clone(), type_);
+                    let type_ = expression.metadata().type_information.unwrap();
+                    self.var_types.insert(var_name.clone(), type_);
                 }
                 Some(expected_type) => {
-                    let expr_type = expr.metadata().type_information.unwrap();
+                    let expression_type = expression.metadata().type_information.unwrap();
 
-                    let expr_type = match expr_type {
+                    // Handle string special case.
+                    let expression_type = match expression_type {
                         // The var will own the value, but when the var is used it will always result in a borrow
                         // so the value stored in `abc` is a `StringOwned`, but the expression `abc` will result in a StringBorrow
                         TypeInformation::StringOwned => TypeInformation::StringBorrow,
-                        _ => expr_type,
+                        _ => expression_type,
                     };
 
-                    if expr_type != *expected_type {
+                    if expression_type != *expected_type {
                         return Err((
-                            *expr.location(),
-                            format!("expected {:?}, but got {:?}", expected_type, expr_type),
+                            *expression.location(),
+                            format!("expected {:?}, but got {:?}", expected_type, expression_type),
                         ));
                     }
                 }
             },
-            ast::Statement::Return(expr) => {
-                if self.return_type != expr.metadata().type_information.unwrap() {
+            ast::Statement::Return(return_expression) => {
+                if self.return_type != return_expression.metadata().type_information.unwrap() {
                     return Err((
-                        *expr.location(),
+                        *return_expression.location(),
                         format!(
                             "expected {:?}, got {:?}",
                             self.return_type,
-                            expr.metadata().type_information.unwrap()
+                            return_expression.metadata().type_information.unwrap()
                         ),
                     ));
                 }
@@ -113,22 +114,23 @@ impl super::Analyzer for TypeAnalyzer {
 
     fn pre_visit_toplevel(
         &mut self,
-        stmt: &mut ast::TopLevelStatement,
+        statement: &mut ast::TopLevelStatement,
     ) -> crate::CompilerResult<()> {
-        match stmt {
-            ast::TopLevelStatement::FunctionDefinition { meta, .. } => {
+        // Clear/Setup function context
+        match statement {
+            ast::TopLevelStatement::FunctionDefinition { metadata, .. } => {
                 self.var_types.clear();
-                self.return_type = meta.return_type.unwrap();
+                self.return_type = metadata.return_type.unwrap();
             }
         }
 
         Ok(())
     }
 
-    fn visit_toplevel(&mut self, stmt: &mut ast::TopLevelStatement) -> crate::CompilerResult<()> {
-        match stmt {
-            ast::TopLevelStatement::FunctionDefinition { meta, .. } => {
-                meta.var_types = self.var_types.clone();
+    fn visit_toplevel(&mut self, statement: &mut ast::TopLevelStatement) -> crate::CompilerResult<()> {
+        match statement {
+            ast::TopLevelStatement::FunctionDefinition { metadata, .. } => {
+                metadata.var_types = self.var_types.clone();
             }
         }
 

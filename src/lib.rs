@@ -71,9 +71,9 @@ pub fn run_exe(exe: &str) {
 }
 
 /// Lists are given in order first
-pub fn find_exe(posible_names: Vec<&str>) -> Option<PathBuf> {
-    for name in posible_names.into_iter() {
-        if let Some(path) = is_on_path(name) {
+pub fn find_exe(possible_names: Vec<&str>) -> Option<PathBuf> {
+    for name in possible_names.into_iter() {
+        if let Some(path) = find_on_path(name) {
             return Some(path);
         }
     }
@@ -81,7 +81,7 @@ pub fn find_exe(posible_names: Vec<&str>) -> Option<PathBuf> {
     None
 }
 
-fn is_on_path(name: &str) -> Option<PathBuf> {
+fn find_on_path(name: &str) -> Option<PathBuf> {
     let path_env = std::env::var("PATH").expect("PATH env var not found!");
     let path_env = std::env::split_paths(&path_env);
 

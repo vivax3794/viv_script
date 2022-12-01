@@ -1,4 +1,4 @@
-use std::{collections::HashMap, string};
+use std::{collections::HashMap};
 
 use inkwell_llvm12::{
     builder::Builder,
@@ -183,7 +183,7 @@ impl<'ctx> Compiler<'ctx> {
     fn compile_expression(&self, exp: &Expression) -> BasicValueEnum<'ctx> {
         match exp {
             Expression::Literal(_, lit) => self.compile_literal(lit),
-            Expression::Binary(_, left, op, right) => {
+            Expression::Binary { metadata: _, left, operator: op, right } => {
                 // only numbers support binary
                 let left = self.compile_expression(left).into_int_value();
                 let right = self.compile_expression(right).into_int_value();
@@ -401,7 +401,7 @@ impl<'ctx> Compiler<'ctx> {
     fn compile_statement(&mut self, stmt: Statement) {
         match stmt {
             Statement::Print(expr) => self.compile_print(expr),
-            Statement::Assignment(_, name, exp) => self.compile_assignment(name, exp),
+            Statement::Assignment { expression_location: _, var_name: name, expression: exp } => self.compile_assignment(name, exp),
             Statement::Return(expr) => self.compile_return(expr),
         }
     }
@@ -435,7 +435,7 @@ impl<'ctx> Compiler<'ctx> {
     fn compile_toplevel_statement(&mut self, stmt: TopLevelStatement) {
         match stmt {
             TopLevelStatement::FunctionDefinition {
-                name, body, meta, ..
+                function_name: name, body, metadata: meta, ..
             } => self.compile_function(&name, body, meta),
         }
     }
@@ -446,7 +446,7 @@ impl<'ctx> Compiler<'ctx> {
 
         for stmt in code.0.iter() {
             match stmt {
-                TopLevelStatement::FunctionDefinition { name, meta, .. } => {
+                TopLevelStatement::FunctionDefinition { function_name: name, metadata: meta, .. } => {
                     self.compile_function_definition(name, meta)
                 }
             }

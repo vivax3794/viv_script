@@ -17,14 +17,14 @@ pub enum TokenValue {
     Minus,
     Plus,
     Star,
-    FSlash,
-    Eq,
+    ForwardSlash,
+    Equal,
     OpenParen,
     CloseParen,
     OpenBracket,
     CloseBracket,
     Arrow,
-    Eof
+    EndOfFile
 }
 
 #[derive(Clone)]

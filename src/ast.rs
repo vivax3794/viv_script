@@ -1,19 +1,25 @@
-use std::collections::HashMap;
 use crate::parser::SourceLocation;
 use crate::types::TypeInformation;
+use std::collections::HashMap;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct File(pub Vec<TopLevelStatement>);
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TopLevelStatement {
-    FunctionDefinition { name: String, body: CodeBody, return_type: String, return_type_location: SourceLocation, meta: FunctionMetadata },
+    FunctionDefinition {
+        function_name: String,
+        body: CodeBody,
+        return_type_name: String,
+        return_type_location: SourceLocation,
+        metadata: FunctionMetadata,
+    },
 }
 
 #[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct FunctionMetadata {
-    pub var_types:  HashMap<String, TypeInformation>,
-    pub return_type: Option<TypeInformation>
+    pub var_types: HashMap<String, TypeInformation>,
+    pub return_type: Option<TypeInformation>,
 }
 
 /// A code body is a collection of statements
@@ -27,7 +33,11 @@ pub enum Statement {
     /// A print statement is used to output the value of a expression
     Print(Expression),
     /// An assignment stores the value of a expression in the provided name
-    Assignment(SourceLocation, String, Expression),
+    Assignment {
+        expression_location: SourceLocation,
+        var_name: String,
+        expression: Expression,
+    },
     Return(Expression),
 }
 
@@ -38,12 +48,12 @@ pub enum Expression {
     /// (unless ofc they are optimized away as part of a constant equation or are just not used)
     Literal(ExpressionMetadata, LiteralType),
     /// A Binary expressions consists of 2 other expressions and an operator
-    Binary(
-        ExpressionMetadata,
-        Box<Expression>,
-        Operator,
-        Box<Expression>,
-    ),
+    Binary {
+        left: Box<Expression>,
+        operator: Operator,
+        right: Box<Expression>,
+        metadata: ExpressionMetadata,
+    },
     /// Loads a value as stored by the assignment expression
     Var(ExpressionMetadata, String),
 }
@@ -67,7 +77,10 @@ impl Expression {
     pub fn metadata(&self) -> &ExpressionMetadata {
         match self {
             Expression::Literal(meta, _) => meta,
-            Expression::Binary(meta, _, _, _) => meta,
+            Expression::Binary {
+                metadata: meta,
+                ..
+            } => meta,
             Expression::Var(meta, _) => meta,
         }
     }
