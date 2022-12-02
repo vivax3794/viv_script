@@ -86,7 +86,10 @@ impl SyntaxParser {
     }
 
     fn parse_binary_expression(&mut self, level: usize) -> CompilerResult<ast::Expression> {
-        let expressions: Vec<Vec<(TokenValue, ast::Operator)>> = vec![
+        let operator_precedence_levels: Vec<Vec<(TokenValue, ast::Operator)>> = vec![
+            vec![
+                (TokenValue::EqualEqual, ast::Operator::Equal)
+            ],
             vec![
                 (TokenValue::Plus, ast::Operator::Add),
                 (TokenValue::Minus, ast::Operator::Sub),
@@ -97,14 +100,14 @@ impl SyntaxParser {
             ],
         ];
 
-        if level >= expressions.len() {
+        if level >= operator_precedence_levels.len() {
             return self.parse_group();
         }
 
         let mut left_expression = self.parse_binary_expression(level + 1)?;
         'expr: loop {
             let next_token = self.peek();
-            for (operator_token, operator) in expressions[level].iter() {
+            for (operator_token, operator) in operator_precedence_levels[level].iter() {
                 if &next_token == operator_token {
                     self.advance();
                     let right_expression = self.parse_binary_expression(level + 1)?;

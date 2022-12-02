@@ -20,6 +20,7 @@ pub enum TokenValue {
     ForwardSlash,
 
     Equal,
+    EqualEqual,
 
     OpenParen,
     CloseParen,

@@ -193,30 +193,36 @@ impl<'ctx> Compiler<'ctx> {
             Expression::Binary {
                 metadata: _,
                 left,
-                operator: op,
+                operator,
                 right,
             } => {
-                // only numbers support binary
-                let left = self.compile_expression(left).into_int_value();
-                let right = self.compile_expression(right).into_int_value();
+                let left_value = self.compile_expression(left).into_int_value();
+                let right_value = self.compile_expression(right).into_int_value();
 
-                match op {
-                    Operator::Add => self
-                        .builder
-                        .build_int_add(left, right, "Number_Add")
-                        .as_basic_value_enum(),
-                    Operator::Sub => self
-                        .builder
-                        .build_int_sub(left, right, "Number_Sub")
-                        .as_basic_value_enum(),
-                    Operator::Mul => self
-                        .builder
-                        .build_int_mul(left, right, "Number_Mul")
-                        .as_basic_value_enum(),
-                    Operator::Div => self
-                        .builder
-                        .build_int_signed_div(left, right, "Number_Div")
-                        .as_basic_value_enum(),
+                match left.metadata().type_information.unwrap() {
+                    TypeInformation::Number => match operator {
+                        Operator::Add => self
+                            .builder
+                            .build_int_add(left_value, right_value, "Number_Add")
+                            .as_basic_value_enum(),
+                        Operator::Sub => self
+                            .builder
+                            .build_int_sub(left_value, right_value, "Number_Sub")
+                            .as_basic_value_enum(),
+                        Operator::Mul => self
+                            .builder
+                            .build_int_mul(left_value, right_value, "Number_Mul")
+                            .as_basic_value_enum(),
+                        Operator::Div => self
+                            .builder
+                            .build_int_signed_div(left_value, right_value, "Number_Div")
+                            .as_basic_value_enum(),
+                        Operator::Equal => self
+                            .builder
+                            .build_int_compare(inkwell::IntPredicate::EQ, left_value, right_value, "Number_Eq")
+                            .as_basic_value_enum(),
+                    },
+                    _ => unreachable!()
                 }
             }
             Expression::Var(_, ref name) => {

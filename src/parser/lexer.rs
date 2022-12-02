@@ -92,8 +92,7 @@ impl Lexer {
                             self.advance();
                             self.emit_token(2, TokenValue::Arrow);
                         },
-                        Some(_) => self.emit_token(1, TokenValue::Minus),
-                        None => {}
+                        _ => self.emit_token(1, TokenValue::Minus),
                     }
                 },
                 '*' => self.emit_token(1, TokenValue::Star),
@@ -104,11 +103,18 @@ impl Lexer {
                             self.advance();
                             self.take_while(|c| c != '\n');
                         },
-                        Some(_) => self.emit_token(1, TokenValue::ForwardSlash),
-                        None => {},
+                        _ => self.emit_token(1, TokenValue::ForwardSlash),
                     }
                 },
-                '=' => self.emit_token(1, TokenValue::Equal),
+                '=' => {
+                    match self.peek() {
+                        Some('=') => {
+                            self.advance();
+                            self.emit_token(2, TokenValue::EqualEqual);
+                        },
+                        _ => self.emit_token(1, TokenValue::Equal)
+                    }
+                },
                 '(' => self.emit_token(1, TokenValue::OpenParen),
                 ')' => self.emit_token(1, TokenValue::CloseParen),
                 '{' => self.emit_token(1, TokenValue::OpenBracket),

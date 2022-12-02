@@ -98,6 +98,8 @@ pub enum Operator {
     Sub,
     Mul,
     Div,
+
+    Equal,
 }
 
 /// A literal is a hardcoded value
