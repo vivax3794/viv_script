@@ -15,7 +15,7 @@ cd viv_script
 
 Install build and runtime dependencies
 ```bash
-sudo apt install llvm-12 zlib1g-dev libclang-common-12-dev build-essential
+sudo apt install llvm-14 zlib1g-dev libclang-common-14-dev build-essential
 ```
 
 Create your test file, we will use `test.viv` for this example

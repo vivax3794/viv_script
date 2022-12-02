@@ -107,4 +107,5 @@ pub enum LiteralType {
     Number(i32),
     /// Literal strings are stored as global strings
     String(String),
+    Boolean(bool),
 }

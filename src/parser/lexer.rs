@@ -140,6 +140,8 @@ impl Lexer {
                         "print" => self.emit_token(5, TokenValue::Print),
                         "fn" =>  self.emit_token(2, TokenValue::Fn),
                         "return" => self.emit_token(6, TokenValue::Return),
+                        "true" => self.emit_token(4, TokenValue::True),
+                        "false" => self.emit_token(5, TokenValue::False),
                         _ => self.emit_token(word.len(), TokenValue::Identifier(word)),
                     }
                 }
@@ -162,80 +164,5 @@ impl Lexer {
         self.emit_token(1, TokenValue::EndOfFile);
 
         error.map(|_| self.tokens.clone())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::parser::tokens::TokenValue;
-
-    use super::Lexer;
-
-    fn parse_file(lex: &mut Lexer) -> Vec<TokenValue> {
-        lex.parse_file()
-            .unwrap()
-            .into_iter()
-            .map(|t| t.value)
-            .collect()
-    }
-
-    #[test]
-    fn symbols() {
-        let mut lexer = Lexer::new("    +  -  * / =  ; ");
-        let tokens = parse_file(&mut lexer);
-
-        assert_eq!(
-            tokens,
-            vec![
-                TokenValue::Plus,
-                TokenValue::Minus,
-                TokenValue::Star,
-                TokenValue::ForwardSlash,
-                TokenValue::Equal,
-                TokenValue::Semicolon,
-                TokenValue::EndOfFile
-            ]
-        )
-    }
-
-    #[test]
-    fn digit() {
-        let mut lexer = Lexer::new("1234");
-        let tokens = parse_file(&mut lexer);
-
-        assert_eq!(
-            tokens,
-            vec![TokenValue::Number("1234".to_string()), TokenValue::EndOfFile]
-        )
-    }
-
-    #[test]
-    fn string() {
-        let mut lexer = Lexer::new("\"hello\"");
-        let tokens = parse_file(&mut lexer);
-
-        assert_eq!(
-            tokens,
-            vec![TokenValue::String("hello".to_string()), TokenValue::EndOfFile]
-        )
-    }
-
-    #[test]
-    fn keyword() {
-        let mut lexer = Lexer::new("print");
-        let tokens = parse_file(&mut lexer);
-
-        assert_eq!(tokens, vec![TokenValue::Print, TokenValue::EndOfFile])
-    }
-
-    #[test]
-    fn identifier() {
-        let mut lexer = Lexer::new("hello");
-        let tokens = parse_file(&mut lexer);
-
-        assert_eq!(
-            tokens,
-            vec![TokenValue::Identifier("hello".to_string()), TokenValue::EndOfFile]
-        )
     }
 }

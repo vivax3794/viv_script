@@ -42,6 +42,8 @@ impl SyntaxParser {
         let literal = match token.value {
             TokenValue::String(content) => ast::LiteralType::String(content),
             TokenValue::Number(digits) => ast::LiteralType::Number(digits.parse().unwrap()),
+            TokenValue::False => ast::LiteralType::Boolean(false),
+            TokenValue::True => ast::LiteralType::Boolean(true),
             TokenValue::Minus => {
                 let digits = self.advance();
                 match digits.value {

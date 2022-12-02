@@ -54,6 +54,7 @@ impl super::Analyzer for TypeAnalyzer {
                 metadata.type_information = Some(match literal {
                     ast::LiteralType::Number(_) => TypeInformation::Number,
                     ast::LiteralType::String(_) => TypeInformation::StringBorrow,
+                    ast::LiteralType::Boolean(_) => TypeInformation::Boolean,
                 })
             }
             ast::Expression::Binary { metadata, left, operator: _, right } => {

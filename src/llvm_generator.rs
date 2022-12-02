@@ -1,6 +1,6 @@
-use std::{collections::HashMap};
+use std::collections::HashMap;
 
-use inkwell_llvm12::{
+use inkwell::{
     builder::Builder,
     context::Context,
     module::Module,
@@ -120,6 +120,7 @@ impl<'ctx> Compiler<'ctx> {
     fn get_type_for(&self, type_: TypeInformation) -> BasicTypeEnum<'ctx> {
         match type_ {
             TypeInformation::Number => self.context.i32_type().as_basic_type_enum(),
+            TypeInformation::Boolean => self.context.bool_type().as_basic_type_enum(),
             TypeInformation::StringOwned => self
                 .context
                 .i8_type()
@@ -159,7 +160,7 @@ impl<'ctx> Compiler<'ctx> {
         let memcpy = self.module.get_function("memcpy").unwrap();
         self.builder
             .build_call(memcpy, &[heap_pointer.into(), value.into()], "Malloc");
-        
+
         heap_pointer
     }
 
@@ -177,13 +178,24 @@ impl<'ctx> Compiler<'ctx> {
                 let ptr_to_string = global_string.as_pointer_value();
                 ptr_to_string.as_basic_value_enum()
             }
+            LiteralType::Boolean(value) => {
+                let bool_type = self.context.bool_type();
+                bool_type
+                    .const_int(*value as u64, false)
+                    .as_basic_value_enum()
+            }
         }
     }
 
     fn compile_expression(&self, exp: &Expression) -> BasicValueEnum<'ctx> {
         match exp {
             Expression::Literal(_, lit) => self.compile_literal(lit),
-            Expression::Binary { metadata: _, left, operator: op, right } => {
+            Expression::Binary {
+                metadata: _,
+                left,
+                operator: op,
+                right,
+            } => {
                 // only numbers support binary
                 let left = self.compile_expression(left).into_int_value();
                 let right = self.compile_expression(right).into_int_value();
@@ -212,9 +224,10 @@ impl<'ctx> Compiler<'ctx> {
                 let stack_ptr = function_context.var_pointers.get(name).unwrap();
 
                 match exp.metadata().type_information.unwrap() {
-                    TypeInformation::Number => self.builder.build_load(*stack_ptr, "I32_Load"),
-                    TypeInformation::StringBorrow => {
-                        self.builder.build_load(*stack_ptr, "Str_Heap_Ptr")
+                    TypeInformation::Number
+                    | TypeInformation::Boolean
+                    | TypeInformation::StringBorrow => {
+                        self.builder.build_load(*stack_ptr, "Var_Load")
                     }
                     TypeInformation::StringOwned => {
                         unreachable!("A var should always produce a Borrowed string")
@@ -229,6 +242,7 @@ impl<'ctx> Compiler<'ctx> {
 
         let format_string = match to_print.metadata().type_information.unwrap() {
             TypeInformation::Number => "%d\n",
+            TypeInformation::Boolean => "%d\n", // TODO: make something better for this
             TypeInformation::StringBorrow => "%s\n",
             TypeInformation::StringOwned => "%s\n",
         };
@@ -266,6 +280,10 @@ impl<'ctx> Compiler<'ctx> {
                     let i32_type = self.context.i32_type();
                     self.builder.build_alloca(i32_type, "Stack_Pointer")
                 }
+                TypeInformation::Boolean => {
+                    let bool_type = self.context.bool_type();
+                    self.builder.build_alloca(bool_type, "Stack_Pointer")
+                }
                 TypeInformation::StringBorrow => {
                     let i8_ptr_type = self.context.i8_type().ptr_type(AddressSpace::Generic);
                     let size_t = self.context.i64_type();
@@ -300,7 +318,7 @@ impl<'ctx> Compiler<'ctx> {
         let expr_value = self.compile_expression(&expr);
 
         match type_ {
-            TypeInformation::Number => {
+            TypeInformation::Number | TypeInformation::Boolean => {
                 self.builder.build_store(*pointer, expr_value);
             }
             TypeInformation::StringBorrow => {
@@ -367,7 +385,7 @@ impl<'ctx> Compiler<'ctx> {
             let pointer = function_context.var_pointers.get(name).unwrap();
 
             match type_ {
-                TypeInformation::Number => {}
+                TypeInformation::Number | TypeInformation::Boolean => {}
                 TypeInformation::StringBorrow => {
                     self.builder.build_call(
                         free_function,
@@ -385,12 +403,9 @@ impl<'ctx> Compiler<'ctx> {
         let value = self.compile_expression(&expr);
 
         match type_ {
-            TypeInformation::Number => {
+            TypeInformation::Number | TypeInformation::Boolean | TypeInformation::StringOwned => {
                 self.builder.build_return(Some(&value));
             }
-            TypeInformation::StringOwned => {
-                self.builder.build_return(Some(&value));
-            },
             TypeInformation::StringBorrow => {
                 let value = self.get_owned_string(value);
                 self.builder.build_return(Some(&value));
@@ -401,7 +416,11 @@ impl<'ctx> Compiler<'ctx> {
     fn compile_statement(&mut self, stmt: Statement) {
         match stmt {
             Statement::Print(expr) => self.compile_print(expr),
-            Statement::Assignment { expression_location: _, var_name: name, expression: exp } => self.compile_assignment(name, exp),
+            Statement::Assignment {
+                expression_location: _,
+                var_name: name,
+                expression: exp,
+            } => self.compile_assignment(name, exp),
             Statement::Return(expr) => self.compile_return(expr),
         }
     }
@@ -435,7 +454,10 @@ impl<'ctx> Compiler<'ctx> {
     fn compile_toplevel_statement(&mut self, stmt: TopLevelStatement) {
         match stmt {
             TopLevelStatement::FunctionDefinition {
-                function_name: name, body, metadata: meta, ..
+                function_name: name,
+                body,
+                metadata: meta,
+                ..
             } => self.compile_function(&name, body, meta),
         }
     }
@@ -446,9 +468,11 @@ impl<'ctx> Compiler<'ctx> {
 
         for stmt in code.0.iter() {
             match stmt {
-                TopLevelStatement::FunctionDefinition { function_name: name, metadata: meta, .. } => {
-                    self.compile_function_definition(name, meta)
-                }
+                TopLevelStatement::FunctionDefinition {
+                    function_name: name,
+                    metadata: meta,
+                    ..
+                } => self.compile_function_definition(name, meta),
             }
         }
         for stmt in code.0.into_iter() {

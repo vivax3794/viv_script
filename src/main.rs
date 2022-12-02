@@ -44,7 +44,7 @@ fn build(optimize: bool, input_file: &str, output_file: &str) {
 
     ir(optimize, input_file, ir_file);
 
-    let llc = find_exe(vec!["llc-12", "llc"]).expect("llc binary not found");
+    let llc = find_exe(vec!["llc-14", "llc"]).expect("llc binary not found");
     let gcc = find_exe(vec!["clang", "gcc"]).expect("gcc/clang not found on system");
 
     compile_to_obj(llc, ir_file, obj_file);

@@ -50,38 +50,3 @@ impl SourceLocation {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::SourceLocation;
-
-    #[test]
-    fn create() {
-        let location = SourceLocation::new(1, 2, 3);
-        assert_eq!(
-            location,
-            SourceLocation {
-                line_start: 1,
-                line_end: 1,
-                char_start: 2,
-                char_end: 3
-            }
-        );
-    }
-
-    #[test]
-    fn combine() {
-        let location_a = SourceLocation::new(1, 4, 6);
-        let location_b = SourceLocation::new(2, 1, 3);
-        let location_ab = SourceLocation::combine(&location_a, &location_b);
-
-        assert_eq!(
-            location_ab,
-            SourceLocation {
-                line_start: 1,
-                line_end: 2,
-                char_start: 1,
-                char_end: 6
-            }
-        );
-    }
-}

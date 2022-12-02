@@ -6,11 +6,11 @@ pub enum TokenValue {
     Number(String),
     String(String),
     Identifier(String),
+    True,
+    False,
     
     // KEYWORDS
     Print,
-    Fn,
-    Return,
     
     // SYMBOLS
     Semicolon,
@@ -18,12 +18,18 @@ pub enum TokenValue {
     Plus,
     Star,
     ForwardSlash,
+
     Equal,
+
     OpenParen,
     CloseParen,
     OpenBracket,
     CloseBracket,
+
     Arrow,
+    Fn,
+    Return,
+
     EndOfFile
 }
 
