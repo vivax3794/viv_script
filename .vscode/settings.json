@@ -4,6 +4,7 @@
         "codebody",
         "ipsccp",
         "licm",
-        "multispace"
+        "multispace",
+        "Noreturn"
     ]
 }

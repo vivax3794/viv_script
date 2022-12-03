@@ -11,6 +11,7 @@ pub enum TokenValue {
     
     // KEYWORDS
     Print,
+    Assert,
     
     // SYMBOLS
     Semicolon,

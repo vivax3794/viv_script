@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, os::unix::process::ExitStatusExt};
 pub use parser::SourceLocation;
 
 mod types;
@@ -53,21 +53,20 @@ pub fn compile_to_exe(gcc: PathBuf, from: &str, to: &str) {
         .expect("Non zero exit code");
 }
 
-pub fn run_exe(exe: &str) {
+pub fn run_exe(exe: &str) -> i32 {
     let mut exe = PathBuf::from(exe);
 
     if exe.is_relative() {
         exe = PathBuf::from(".").join(exe);
     }
 
-    std::process::Command::new(exe)
+    let exit = std::process::Command::new(exe)
         .spawn()
         .unwrap()
         .wait()
-        .unwrap()
-        .success()
-        .then_some(())
-        .expect("Non zero exit code");
+        .unwrap();
+
+    exit.code().unwrap_or_else(|| exit.signal().unwrap())
 }
 
 /// Lists are given in order first

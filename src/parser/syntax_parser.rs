@@ -164,9 +164,17 @@ impl SyntaxParser {
         Ok(ast::Statement::Return(expression))
     }
 
+    fn parse_assert(&mut self) -> CompilerResult<ast::Statement> {
+        self.advance();
+        let expression = self.parse_expression()?;
+        self.expect(TokenValue::Semicolon)?;
+        Ok(ast::Statement::Assert(expression))
+    }
+
     fn parse_statement(&mut self) -> CompilerResult<Option<ast::Statement>> {
         match self.peek() {
             TokenValue::Print => self.parse_print().map(Some),
+            TokenValue::Assert => self.parse_assert().map(Some),
             TokenValue::Identifier(_) => self.parse_assignment().map(Some),
             TokenValue::Return => self.parse_return().map(Some),
             _ => Ok(None),

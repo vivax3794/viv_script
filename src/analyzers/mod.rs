@@ -33,6 +33,7 @@ trait Analyzer {
     fn _visit_stmt(&mut self, statement: &mut ast::Statement) -> CompilerResult<()> {
         match statement {
             ast::Statement::Print(expr) => self._visit_expression(expr)?,
+            ast::Statement::Assert(expr) => self._visit_expression(expr)?,
             ast::Statement::Assignment { expression_location: _, var_name: _, expression: expr } => self._visit_expression(expr)?,
             ast::Statement::Return(expr) => self._visit_expression(expr)?,
         }

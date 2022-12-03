@@ -144,6 +144,7 @@ impl Lexer {
                     let word = char.to_string() + &self.take_while(|c| c.is_alphabetic() || c == '_');
                     match word.as_str() {
                         "print" => self.emit_token(5, TokenValue::Print),
+                        "assert" => self.emit_token(6, TokenValue::Assert),
                         "fn" =>  self.emit_token(2, TokenValue::Fn),
                         "return" => self.emit_token(6, TokenValue::Return),
                         "true" => self.emit_token(4, TokenValue::True),

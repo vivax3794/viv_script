@@ -100,6 +100,15 @@ impl super::Analyzer for TypeAnalyzer {
     fn visit_stmt(&mut self, stmt: &mut ast::Statement) -> crate::CompilerResult<()> {
         match stmt {
             ast::Statement::Print(_) => {}
+            ast::Statement::Assert(expr) => {
+                let expr_type = expr.metadata().type_information.unwrap();
+                if expr_type != TypeInformation::Boolean {
+                    return Err((
+                        *expr.location(),
+                        format!("Expected Boolean, got {:?}", expr_type)
+                    ));
+                }
+            }
             ast::Statement::Assignment {
                 var_name,
                 expression,

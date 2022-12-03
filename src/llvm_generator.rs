@@ -7,7 +7,7 @@ use inkwell::{
     passes::PassManager,
     types::{BasicType, BasicTypeEnum},
     values::{BasicValue, BasicValueEnum, PointerValue},
-    AddressSpace,
+    AddressSpace, attributes::AttributeLoc,
 };
 
 use crate::types::TypeInformation;
@@ -115,6 +115,11 @@ impl<'ctx> Compiler<'ctx> {
         let memcpy_function_type = i8_ptr_type.fn_type(&memcpy_argument_types, false);
         self.module
             .add_function("memcpy", memcpy_function_type, None);
+
+        // _Noreturn void abort(void);
+        let abort_argument_types = [];
+        let abort_function_type = void_type.fn_type(&abort_argument_types, false);
+        self.module.add_function("abort", abort_function_type, None);
     }
 
     fn get_type_for(&self, type_: TypeInformation) -> BasicTypeEnum<'ctx> {
@@ -219,10 +224,15 @@ impl<'ctx> Compiler<'ctx> {
                             .as_basic_value_enum(),
                         Operator::Equal => self
                             .builder
-                            .build_int_compare(inkwell::IntPredicate::EQ, left_value, right_value, "Number_Eq")
+                            .build_int_compare(
+                                inkwell::IntPredicate::EQ,
+                                left_value,
+                                right_value,
+                                "Number_Eq",
+                            )
                             .as_basic_value_enum(),
                     },
-                    _ => unreachable!()
+                    _ => unreachable!(),
                 }
             }
             Expression::Var(_, ref name) => {
@@ -419,9 +429,63 @@ impl<'ctx> Compiler<'ctx> {
         }
     }
 
+    fn compile_assert(&self, expr: Expression) {
+        let abort = self.module.get_function("abort").unwrap();
+        let printf = self.module.get_function("printf").unwrap();
+
+        let expr_value = self.compile_expression(&expr).into_int_value();
+        let line_num = expr.location().line_start;
+
+        let current_block = self.builder.get_insert_block().unwrap();
+        let abort_block = self
+            .context
+            .insert_basic_block_after(current_block, &format!("{}L_Assert_Abort", line_num));
+        let success_block = self
+            .context
+            .insert_basic_block_after(abort_block, &format!("{}L_Assert_Success", line_num));
+
+        self.builder
+            .build_conditional_branch(expr_value, success_block, abort_block);
+
+        // Crash and burn
+        self.builder.position_at_end(abort_block);
+
+        let format_string = unsafe {
+            self.builder
+                .build_global_string("%s\n", "Assert_Msg_Format_String")
+        };
+        let msg_string = unsafe {
+            self.builder
+                .build_global_string(
+                    &format!("Assert on line {} failed", line_num),
+                    "Assert_Msg_String",
+                )
+                .as_pointer_value()
+        };
+        let printf_arguments = [
+            self.builder
+                .build_pointer_cast(
+                    format_string.as_pointer_value(),
+                    self.context.i8_type().ptr_type(AddressSpace::Generic),
+                    "Format_String",
+                )
+                .into(),
+            msg_string.into(),
+        ];
+        self.builder
+            .build_call(printf, &printf_arguments, "Assert_Printf");
+        self.builder
+            .build_call(abort, &[], &format!("{}L_Assert_Abort_Call", line_num));
+        self.builder.build_unreachable();
+
+        // Continue to build on the success branch
+        self.builder.position_at_end(success_block);
+    }
+
     fn compile_statement(&mut self, stmt: Statement) {
         match stmt {
             Statement::Print(expr) => self.compile_print(expr),
+            Statement::Assert(expr) => self.compile_assert(expr),
             Statement::Assignment {
                 expression_location: _,
                 var_name: name,

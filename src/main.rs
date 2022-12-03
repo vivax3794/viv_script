@@ -55,12 +55,12 @@ fn build(optimize: bool, input_file: &str, output_file: &str) {
     compile_to_exe(gcc, obj_file, output_file);
 }
 
-fn run(optimize: bool, input_file: &str) {
+fn run(optimize: bool, input_file: &str) -> i32 {
     let exe_file = temp_file::empty();
     let exe_file = exe_file.path().to_str().unwrap();
 
     build(optimize, input_file, exe_file);
-    run_exe(exe_file);
+    run_exe(exe_file)
 }
 
 fn main() {
@@ -71,7 +71,7 @@ fn main() {
             input_file,
             output_file,
         } => build(!args.no_optimize, &input_file, &output_file),
-        Command::Run { input_file } => run(!args.no_optimize, &input_file),
+        Command::Run { input_file } => exit(run(!args.no_optimize, &input_file)),
         Command::Ir {
             input_file,
             output_fie,
