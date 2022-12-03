@@ -7,6 +7,7 @@ pub struct SourceLocation {
 }
 
 impl SourceLocation {
+    #[must_use]
     pub fn new(line: usize, char_start: usize, char_end: usize) -> Self {
         Self {
             line_start: line,
@@ -16,7 +17,7 @@ impl SourceLocation {
         }
     }
 
-    pub fn combine(a: &Self, b: &Self) -> Self {
+    #[must_use] pub fn combine(a: &Self, b: &Self) -> Self {
         Self {
             line_start: usize::min(a.line_start, b.line_start),
             line_end: usize::max(a.line_end, b.line_end),
@@ -25,7 +26,7 @@ impl SourceLocation {
         }
     }
 
-    pub fn get_line_highlights(&self, source_code: &str) -> String {
+    #[must_use] pub fn get_line_highlights(&self, source_code: &str) -> String {
         // The source location is based on the source code, so the line should always be found
         // line numbers are also 1-index
         let lines: String = source_code
@@ -49,4 +50,3 @@ impl SourceLocation {
         format!("{lines}\n{pointers}")
     }
 }
-

@@ -13,18 +13,25 @@ trait Analyzer {
     fn visit_toplevel(&mut self, _statement: &mut ast::TopLevelStatement) -> CompilerResult<()> {
         Ok(())
     }
-    fn pre_visit_toplevel(&mut self, _statement: &mut ast::TopLevelStatement) -> CompilerResult<()> {
+    fn pre_visit_toplevel(
+        &mut self,
+        _statement: &mut ast::TopLevelStatement,
+    ) -> CompilerResult<()> {
         Ok(())
     }
 
     fn _visit_expression(&mut self, expression: &mut ast::Expression) -> CompilerResult<()> {
         match expression {
-            ast::Expression::Literal(_, _) => {}
-            ast::Expression::Binary { metadata: _, left, operator: _, right } => {
+            ast::Expression::Binary {
+                metadata: _,
+                left,
+                operator: _,
+                right,
+            } => {
                 self._visit_expression(left.as_mut())?;
                 self._visit_expression(right.as_mut())?;
             }
-            ast::Expression::Var(_, _) => {}
+            ast::Expression::Var(_, _) | ast::Expression::Literal(_, _) => {}
         }
 
         self.visit_expression(expression)
@@ -32,17 +39,21 @@ trait Analyzer {
 
     fn _visit_stmt(&mut self, statement: &mut ast::Statement) -> CompilerResult<()> {
         match statement {
-            ast::Statement::Print(expr) => self._visit_expression(expr)?,
-            ast::Statement::Assert(expr) => self._visit_expression(expr)?,
-            ast::Statement::Assignment { expression_location: _, var_name: _, expression: expr } => self._visit_expression(expr)?,
-            ast::Statement::Return(expr) => self._visit_expression(expr)?,
+            ast::Statement::Print(expr)
+            | ast::Statement::Assert(expr)
+            | ast::Statement::Assignment {
+                expression_location: _,
+                var_name: _,
+                expression: expr,
+            }
+            | ast::Statement::Return(expr) => self._visit_expression(expr)?,
         }
 
         self.visit_stmt(statement)
     }
 
     fn _visit_codebody(&mut self, body: &mut ast::CodeBody) -> CompilerResult<()> {
-        for stmt in body.0.iter_mut() {
+        for stmt in &mut body.0 {
             self._visit_stmt(stmt)?;
         }
 
@@ -53,14 +64,16 @@ trait Analyzer {
         self.pre_visit_toplevel(statement)?;
 
         match statement {
-            ast::TopLevelStatement::FunctionDefinition { body, ..} => self._visit_codebody(body)?,
+            ast::TopLevelStatement::FunctionDefinition { body, .. } => {
+                self._visit_codebody(body)?;
+            }
         }
 
         self.visit_toplevel(statement)
     }
 
     fn visit_file(&mut self, file: &mut ast::File) -> CompilerResult<()> {
-        for stmt in file.0.iter_mut() {
+        for stmt in &mut file.0 {
             self._visit_toplevel(stmt)?;
         }
 

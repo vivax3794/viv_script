@@ -77,12 +77,9 @@ impl From<SourceLocation> for ExpressionMetadata {
 impl Expression {
     pub fn metadata(&self) -> &ExpressionMetadata {
         match self {
-            Expression::Literal(meta, _) => meta,
-            Expression::Binary {
-                metadata: meta,
-                ..
-            } => meta,
-            Expression::Var(meta, _) => meta,
+            Expression::Literal(meta, _)
+            | Expression::Binary { metadata: meta, .. }
+            | Expression::Var(meta, _) => meta,
         }
     }
 

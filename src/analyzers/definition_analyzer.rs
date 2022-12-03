@@ -8,7 +8,7 @@ impl DefinitionAnalyzer {
         Self {}
     }
 
-    fn get_type(&self, type_name: &str) -> Option<TypeInformation> {
+    fn get_type(type_name: &str) -> Option<TypeInformation> {
         match type_name {
             "Num" => Some(TypeInformation::Number),
             // This would be different in different contexts, but owned can be for all...
@@ -28,7 +28,7 @@ impl super::Analyzer for DefinitionAnalyzer {
                 metadata,
                 ..
             } => {
-                let return_type = match self.get_type(return_type_name) {
+                let return_type = match DefinitionAnalyzer::get_type(return_type_name) {
                     Some(type_) => type_,
                     None => return Err((*return_type_location, "Invalid type name".to_string())),
                 };

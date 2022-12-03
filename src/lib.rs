@@ -1,8 +1,16 @@
-use std::{path::PathBuf, os::unix::process::ExitStatusExt};
-pub use parser::SourceLocation;
+#![warn(clippy::pedantic)]
+#![allow(
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    // We often convert to u64
+    clippy::cast_sign_loss
+)]
 
-mod types;
+pub use parser::SourceLocation;
+use std::{os::unix::process::ExitStatusExt, path::PathBuf};
+
 mod analyzers;
+mod types;
 
 mod ast;
 mod llvm_generator;
@@ -10,7 +18,7 @@ mod parser;
 
 type CompilerResult<T> = Result<T, (SourceLocation, String)>;
 
-pub fn report_error(code: &str, err: (SourceLocation, String)) {
+pub fn report_error(code: &str, err: &(SourceLocation, String)) {
     let traceback = err.0.get_line_highlights(code);
     eprintln!("{}\nERROR: {}", traceback, err.1);
 }
@@ -53,6 +61,7 @@ pub fn compile_to_exe(gcc: PathBuf, from: &str, to: &str) {
         .expect("Non zero exit code");
 }
 
+#[must_use]
 pub fn run_exe(exe: &str) -> i32 {
     let mut exe = PathBuf::from(exe);
 
@@ -70,8 +79,9 @@ pub fn run_exe(exe: &str) -> i32 {
 }
 
 /// Lists are given in order first
+#[must_use]
 pub fn find_exe(possible_names: Vec<&str>) -> Option<PathBuf> {
-    for name in possible_names.into_iter() {
+    for name in possible_names {
         if let Some(path) = find_on_path(name) {
             return Some(path);
         }
@@ -80,6 +90,7 @@ pub fn find_exe(possible_names: Vec<&str>) -> Option<PathBuf> {
     None
 }
 
+#[must_use]
 fn find_on_path(name: &str) -> Option<PathBuf> {
     let path_env = std::env::var("PATH").expect("PATH env var not found!");
     let path_env = std::env::split_paths(&path_env);

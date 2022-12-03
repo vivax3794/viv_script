@@ -25,15 +25,15 @@ impl SyntaxParser {
         self.tokens[0].clone().value
     }
 
-    fn expect(&mut self, expected_token: TokenValue) -> CompilerResult<()> {
+    fn expect(&mut self, expected_token: &TokenValue) -> CompilerResult<()> {
         let token = self.advance();
-        if token.value != expected_token {
+        if token.value == *expected_token {
+            Ok(())
+        } else {
             Err((
                 token.source_location,
                 format!("expected {:?} found {:?}", expected_token, token.value),
             ))
-        } else {
-            Ok(())
         }
     }
 
@@ -78,7 +78,7 @@ impl SyntaxParser {
             TokenValue::OpenParen => {
                 self.advance();
                 let expression = self.parse_expression()?;
-                self.expect(TokenValue::CloseParen)?;
+                self.expect(&TokenValue::CloseParen)?;
                 Ok(expression)
             }
             _ => self.parse_literal(),
@@ -107,7 +107,7 @@ impl SyntaxParser {
         let mut left_expression = self.parse_binary_expression(level + 1)?;
         'expr: loop {
             let next_token = self.peek();
-            for (operator_token, operator) in operator_precedence_levels[level].iter() {
+            for (operator_token, operator) in &operator_precedence_levels[level] {
                 if &next_token == operator_token {
                     self.advance();
                     let right_expression = self.parse_binary_expression(level + 1)?;
@@ -135,7 +135,7 @@ impl SyntaxParser {
     fn parse_print(&mut self) -> CompilerResult<ast::Statement> {
         self.advance(); // we assume this is only called once we know we have a print
         let expression = self.parse_expression()?;
-        self.expect(TokenValue::Semicolon)?;
+        self.expect(&TokenValue::Semicolon)?;
         Ok(ast::Statement::Print(expression))
     }
 
@@ -146,9 +146,9 @@ impl SyntaxParser {
             _ => unreachable!("Should have been confirmed before calling!"),
         };
 
-        self.expect(TokenValue::Equal)?;
+        self.expect(&TokenValue::Equal)?;
         let expression = self.parse_expression()?;
-        self.expect(TokenValue::Semicolon)?;
+        self.expect(&TokenValue::Semicolon)?;
 
         Ok(ast::Statement::Assignment {
             expression_location: name_token.source_location,
@@ -160,14 +160,14 @@ impl SyntaxParser {
     fn parse_return(&mut self) -> CompilerResult<ast::Statement> {
         self.advance();
         let expression = self.parse_expression()?;
-        self.expect(TokenValue::Semicolon)?;
+        self.expect(&TokenValue::Semicolon)?;
         Ok(ast::Statement::Return(expression))
     }
 
     fn parse_assert(&mut self) -> CompilerResult<ast::Statement> {
         self.advance();
         let expression = self.parse_expression()?;
-        self.expect(TokenValue::Semicolon)?;
+        self.expect(&TokenValue::Semicolon)?;
         Ok(ast::Statement::Assert(expression))
     }
 
@@ -182,19 +182,19 @@ impl SyntaxParser {
     }
 
     fn parse_codeblock(&mut self) -> CompilerResult<ast::CodeBody> {
-        self.expect(TokenValue::OpenBracket)?;
+        self.expect(&TokenValue::OpenBracket)?;
 
         let mut statements = Vec::new();
         while let Some(statement) = self.parse_statement()? {
             statements.push(statement);
         }
 
-        self.expect(TokenValue::CloseBracket)?;
+        self.expect(&TokenValue::CloseBracket)?;
         Ok(ast::CodeBody(statements))
     }
 
     fn parse_function_definition(&mut self) -> CompilerResult<ast::TopLevelStatement> {
-        self.expect(TokenValue::Fn)?;
+        self.expect(&TokenValue::Fn)?;
 
         let function_name_token = self.advance();
         let function_name = match function_name_token.value {
@@ -207,10 +207,10 @@ impl SyntaxParser {
             }
         };
 
-        self.expect(TokenValue::OpenParen)?;
-        self.expect(TokenValue::CloseParen)?;
+        self.expect(&TokenValue::OpenParen)?;
+        self.expect(&TokenValue::CloseParen)?;
 
-        self.expect(TokenValue::Arrow)?;
+        self.expect(&TokenValue::Arrow)?;
 
         let return_type_token = self.advance();
         let return_type_name = match return_type_token.value {
@@ -230,7 +230,7 @@ impl SyntaxParser {
             body,
             return_type_name,
             return_type_location: return_type_token.source_location,
-            metadata: Default::default(),
+            metadata: ast::FunctionMetadata::default(),
         })
     }
 

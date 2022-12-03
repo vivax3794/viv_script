@@ -46,7 +46,7 @@ impl Lexer {
     where
         P: Fn(char) -> bool,
     {
-        while self.peek().map(&predicate).unwrap_or(false) {
+        while self.peek().map_or(false, &predicate) {
             self.advance();
         }
     }
@@ -56,7 +56,7 @@ impl Lexer {
         P: Fn(char) -> bool,
     {
         let mut chars = Vec::new();
-        while self.peek().map(&predicate).unwrap_or(false) {
+        while self.peek().map_or(false, &predicate){
             chars.push(self.advance().unwrap());
         }
 

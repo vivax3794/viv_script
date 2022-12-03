@@ -33,7 +33,7 @@ enum Command {
 fn ir(optimize: bool, input_file: &str, output_file: &str) {
     let code = std::fs::read_to_string(input_file).unwrap();
     if let Err(err) = compile_to_ir(input_file, &code, output_file, optimize) {
-        report_error(&code, err);
+        report_error(&code, &err);
         // This is not code error handling, but :P
         exit(1);
     }

@@ -16,10 +16,9 @@ impl TypeAnalyzer {
     }
 
     fn analyze_binary(
-        &mut self,
         metadata: &mut ast::ExpressionMetadata,
         left_expression: &mut ast::Expression,
-        operator: &ast::Operator,
+        operator: ast::Operator,
         right_expression: &mut ast::Expression,
     ) -> crate::CompilerResult<()> {
         let left_type = left_expression.metadata().type_information.unwrap();
@@ -46,22 +45,14 @@ impl TypeAnalyzer {
                 | ast::Operator::Div => TypeInformation::Number,
                 ast::Operator::Equal => TypeInformation::Boolean,
             },
-            TypeInformation::Boolean => match operator {
-                _ => {
-                    return Err((
-                        source_location,
-                        format!("Unsupported operator for boolean {:?}", operator),
-                    ))
-                }
-            },
-            TypeInformation::StringBorrow | TypeInformation::StringOwned => match operator {
-                _ => {
-                    return Err((
-                        source_location,
-                        format!("Unsupported operator for boolean {:?}", operator),
-                    ))
-                }
-            },
+            TypeInformation::Boolean => return Err((
+                source_location,
+                format!("Unsupported operator for boolean {:?}", operator),
+            )),
+            TypeInformation::StringBorrow | TypeInformation::StringOwned => return Err((
+                source_location,
+                format!("Unsupported operator for String {:?}", operator),
+            )),
         };
 
         metadata.type_information = Some(resulting_type);
@@ -78,7 +69,7 @@ impl super::Analyzer for TypeAnalyzer {
                     ast::LiteralType::Number(_) => TypeInformation::Number,
                     ast::LiteralType::String(_) => TypeInformation::StringBorrow,
                     ast::LiteralType::Boolean(_) => TypeInformation::Boolean,
-                })
+                });
             }
             ast::Expression::Binary {
                 metadata,
@@ -86,7 +77,7 @@ impl super::Analyzer for TypeAnalyzer {
                 operator,
                 right,
             } => {
-                self.analyze_binary(metadata, left, operator, right)?;
+                TypeAnalyzer::analyze_binary(metadata, left, *operator, right)?;
             }
             ast::Expression::Var(metadata, var_name) => match self.var_types.get(var_name) {
                 Some(type_) => metadata.type_information = Some(*type_),

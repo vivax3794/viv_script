@@ -6,5 +6,6 @@
         "licm",
         "multispace",
         "Noreturn"
-    ]
+    ],
+    "discord.enabled": false
 }

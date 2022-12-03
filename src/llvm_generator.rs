@@ -7,12 +7,11 @@ use inkwell::{
     passes::PassManager,
     types::{BasicType, BasicTypeEnum},
     values::{BasicValue, BasicValueEnum, PointerValue},
-    AddressSpace, attributes::AttributeLoc,
+    AddressSpace,
 };
 
+use crate::ast;
 use crate::types::TypeInformation;
-
-use super::ast::*;
 
 struct FunctionContext<'ctx> {
     var_types: HashMap<String, TypeInformation>,
@@ -126,12 +125,7 @@ impl<'ctx> Compiler<'ctx> {
         match type_ {
             TypeInformation::Number => self.context.i32_type().as_basic_type_enum(),
             TypeInformation::Boolean => self.context.bool_type().as_basic_type_enum(),
-            TypeInformation::StringOwned => self
-                .context
-                .i8_type()
-                .ptr_type(AddressSpace::Generic)
-                .as_basic_type_enum(),
-            TypeInformation::StringBorrow => self
+            TypeInformation::StringOwned | TypeInformation::StringBorrow => self
                 .context
                 .i8_type()
                 .ptr_type(AddressSpace::Generic)
@@ -169,33 +163,33 @@ impl<'ctx> Compiler<'ctx> {
         heap_pointer
     }
 
-    fn compile_literal(&self, lit: &LiteralType) -> BasicValueEnum<'ctx> {
+    fn compile_literal(&self, lit: &ast::LiteralType) -> BasicValueEnum<'ctx> {
         match lit {
-            LiteralType::Number(value) => {
+            ast::LiteralType::Number(value) => {
                 let i32_type = self.context.i32_type();
                 i32_type
                     .const_int(*value as u64, false)
                     .as_basic_value_enum()
             }
-            LiteralType::String(value) => {
+            ast::LiteralType::String(value) => {
                 let global_string =
                     unsafe { self.builder.build_global_string(value, "Literal_String") };
                 let ptr_to_string = global_string.as_pointer_value();
                 ptr_to_string.as_basic_value_enum()
             }
-            LiteralType::Boolean(value) => {
+            ast::LiteralType::Boolean(value) => {
                 let bool_type = self.context.bool_type();
                 bool_type
-                    .const_int(*value as u64, false)
+                    .const_int(u64::from(*value), false)
                     .as_basic_value_enum()
             }
         }
     }
 
-    fn compile_expression(&self, exp: &Expression) -> BasicValueEnum<'ctx> {
+    fn compile_expression(&self, exp: &ast::Expression) -> BasicValueEnum<'ctx> {
         match exp {
-            Expression::Literal(_, lit) => self.compile_literal(lit),
-            Expression::Binary {
+            ast::Expression::Literal(_, lit) => self.compile_literal(lit),
+            ast::Expression::Binary {
                 metadata: _,
                 left,
                 operator,
@@ -206,23 +200,23 @@ impl<'ctx> Compiler<'ctx> {
 
                 match left.metadata().type_information.unwrap() {
                     TypeInformation::Number => match operator {
-                        Operator::Add => self
+                        ast::Operator::Add => self
                             .builder
                             .build_int_add(left_value, right_value, "Number_Add")
                             .as_basic_value_enum(),
-                        Operator::Sub => self
+                        ast::Operator::Sub => self
                             .builder
                             .build_int_sub(left_value, right_value, "Number_Sub")
                             .as_basic_value_enum(),
-                        Operator::Mul => self
+                        ast::Operator::Mul => self
                             .builder
                             .build_int_mul(left_value, right_value, "Number_Mul")
                             .as_basic_value_enum(),
-                        Operator::Div => self
+                        ast::Operator::Div => self
                             .builder
                             .build_int_signed_div(left_value, right_value, "Number_Div")
                             .as_basic_value_enum(),
-                        Operator::Equal => self
+                        ast::Operator::Equal => self
                             .builder
                             .build_int_compare(
                                 inkwell::IntPredicate::EQ,
@@ -235,7 +229,7 @@ impl<'ctx> Compiler<'ctx> {
                     _ => unreachable!(),
                 }
             }
-            Expression::Var(_, ref name) => {
+            ast::Expression::Var(_, ref name) => {
                 let function_context = self.function_context.as_ref().unwrap();
                 let stack_ptr = function_context.var_pointers.get(name).unwrap();
 
@@ -253,14 +247,12 @@ impl<'ctx> Compiler<'ctx> {
         }
     }
 
-    fn compile_print(&self, to_print: Expression) {
-        let value = self.compile_expression(&to_print);
+    fn compile_print(&self, to_print: &ast::Expression) {
+        let value = self.compile_expression(to_print);
 
         let format_string = match to_print.metadata().type_information.unwrap() {
-            TypeInformation::Number => "%d\n",
-            TypeInformation::Boolean => "%d\n", // TODO: make something better for this
-            TypeInformation::StringBorrow => "%s\n",
-            TypeInformation::StringOwned => "%s\n",
+            TypeInformation::Boolean | TypeInformation::Number => "%d\n", // TODO: make something better for this
+            TypeInformation::StringBorrow | TypeInformation::StringOwned => "%s\n",
         };
 
         let printf_function = self.module.get_function("printf").unwrap();
@@ -326,12 +318,12 @@ impl<'ctx> Compiler<'ctx> {
         }
     }
 
-    fn compile_assignment(&mut self, name: String, expr: Expression) {
+    fn compile_assignment(&mut self, name: &str, expr: &ast::Expression) {
         let function_context = self.function_context.as_ref().unwrap();
-        let type_ = function_context.var_types.get(&name).unwrap();
-        let pointer = function_context.var_pointers.get(&name).unwrap();
+        let type_ = function_context.var_types.get(name).unwrap();
+        let pointer = function_context.var_pointers.get(name).unwrap();
 
-        let expr_value = self.compile_expression(&expr);
+        let expr_value = self.compile_expression(expr);
 
         match type_ {
             TypeInformation::Number | TypeInformation::Boolean => {
@@ -414,9 +406,9 @@ impl<'ctx> Compiler<'ctx> {
         }
     }
 
-    fn compile_return(&self, expr: Expression) {
+    fn compile_return(&self, expr: &ast::Expression) {
         let type_ = expr.metadata().type_information.unwrap();
-        let value = self.compile_expression(&expr);
+        let value = self.compile_expression(expr);
 
         match type_ {
             TypeInformation::Number | TypeInformation::Boolean | TypeInformation::StringOwned => {
@@ -429,11 +421,11 @@ impl<'ctx> Compiler<'ctx> {
         }
     }
 
-    fn compile_assert(&self, expr: Expression) {
+    fn compile_assert(&self, expr: &ast::Expression) {
         let abort = self.module.get_function("abort").unwrap();
         let printf = self.module.get_function("printf").unwrap();
 
-        let expr_value = self.compile_expression(&expr).into_int_value();
+        let expr_value = self.compile_expression(expr).into_int_value();
         let line_num = expr.location().line_start;
 
         let current_block = self.builder.get_insert_block().unwrap();
@@ -482,20 +474,21 @@ impl<'ctx> Compiler<'ctx> {
         self.builder.position_at_end(success_block);
     }
 
-    fn compile_statement(&mut self, stmt: Statement) {
+    fn compile_statement(&mut self, stmt: ast::Statement) {
         match stmt {
-            Statement::Print(expr) => self.compile_print(expr),
-            Statement::Assert(expr) => self.compile_assert(expr),
-            Statement::Assignment {
+            ast::Statement::Print(expr) => self.compile_print(&expr),
+
+            ast::Statement::Assert(expr) => self.compile_assert(&expr),
+            ast::Statement::Assignment {
                 expression_location: _,
                 var_name: name,
                 expression: exp,
-            } => self.compile_assignment(name, exp),
-            Statement::Return(expr) => self.compile_return(expr),
+            } => self.compile_assignment(&name, &exp),
+            ast::Statement::Return(expr) => self.compile_return(&expr),
         }
     }
 
-    fn compile_function_definition(&self, name: &str, meta: &FunctionMetadata) {
+    fn compile_function_definition(&self, name: &str, meta: &ast::FunctionMetadata) {
         let return_type = self.get_type_for(meta.return_type.unwrap());
         let arguments = [];
 
@@ -503,7 +496,7 @@ impl<'ctx> Compiler<'ctx> {
         self.module.add_function(name, function_type, None);
     }
 
-    fn compile_function(&mut self, name: &str, code: CodeBody, meta: FunctionMetadata) {
+    fn compile_function(&mut self, name: &str, code: ast::CodeBody, meta: ast::FunctionMetadata) {
         let function = self.module.get_function(name).unwrap();
 
         let entry_block = self.context.append_basic_block(function, "entry");
@@ -515,15 +508,15 @@ impl<'ctx> Compiler<'ctx> {
         });
 
         self.compile_var_allocations();
-        for stmt in code.0.into_iter() {
+        for stmt in code.0 {
             self.compile_statement(stmt);
         }
         self.free_used_vars();
     }
 
-    fn compile_toplevel_statement(&mut self, stmt: TopLevelStatement) {
+    fn compile_toplevel_statement(&mut self, stmt: ast::TopLevelStatement) {
         match stmt {
-            TopLevelStatement::FunctionDefinition {
+            ast::TopLevelStatement::FunctionDefinition {
                 function_name: name,
                 body,
                 metadata: meta,
@@ -532,20 +525,20 @@ impl<'ctx> Compiler<'ctx> {
         }
     }
 
-    pub fn compile_code(&mut self, code: File, optimize: bool) {
+    pub fn compile_code(&mut self, code: ast::File, optimize: bool) {
         // Create clib functions
         self.compile_glibc_definitions();
 
-        for stmt in code.0.iter() {
+        for stmt in &code.0 {
             match stmt {
-                TopLevelStatement::FunctionDefinition {
+                ast::TopLevelStatement::FunctionDefinition {
                     function_name: name,
                     metadata: meta,
                     ..
                 } => self.compile_function_definition(name, meta),
             }
         }
-        for stmt in code.0.into_iter() {
+        for stmt in code.0 {
             self.compile_toplevel_statement(stmt);
         }
 
