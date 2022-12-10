@@ -49,7 +49,7 @@ impl TypeAnalyzer {
                 source_location,
                 format!("Unsupported operator for boolean {:?}", operator),
             )),
-            TypeInformation::StringBorrow | TypeInformation::StringOwned => return Err((
+            TypeInformation::String(_) => return Err((
                 source_location,
                 format!("Unsupported operator for String {:?}", operator),
             )),
@@ -67,7 +67,7 @@ impl super::Analyzer for TypeAnalyzer {
             ast::Expression::Literal(metadata, literal) => {
                 metadata.type_information = Some(match literal {
                     ast::LiteralType::Number(_) => TypeInformation::Number,
-                    ast::LiteralType::String(_) => TypeInformation::StringBorrow,
+                    ast::LiteralType::String(_) => TypeInformation::String(false),
                     ast::LiteralType::Boolean(_) => TypeInformation::Boolean,
                 });
             }
@@ -107,18 +107,11 @@ impl super::Analyzer for TypeAnalyzer {
             } => match self.var_types.get(var_name) {
                 None => {
                     let type_ = expression.metadata().type_information.unwrap();
+                    let type_ = type_.mark_borrowed();
                     self.var_types.insert(var_name.clone(), type_);
                 }
                 Some(expected_type) => {
                     let expression_type = expression.metadata().type_information.unwrap();
-
-                    // Handle string special case.
-                    let expression_type = match expression_type {
-                        // The var will own the value, but when the var is used it will always result in a borrow
-                        // so the value stored in `abc` is a `StringOwned`, but the expression `abc` will result in a StringBorrow
-                        TypeInformation::StringOwned => TypeInformation::StringBorrow,
-                        _ => expression_type,
-                    };
 
                     if expression_type != *expected_type {
                         return Err((

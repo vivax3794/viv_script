@@ -12,7 +12,7 @@ impl DefinitionAnalyzer {
         match type_name {
             "Num" => Some(TypeInformation::Number),
             // This would be different in different contexts, but owned can be for all...
-            "String" => Some(TypeInformation::StringOwned),
+            "String" => Some(TypeInformation::String(true)),
             "Bool" => Some(TypeInformation::Boolean),
             _ => None,
         }

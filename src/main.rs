@@ -34,7 +34,7 @@ fn ir(optimize: bool, input_file: &str, output_file: &str) {
     let code = std::fs::read_to_string(input_file).unwrap();
     if let Err(err) = compile_to_ir(input_file, &code, output_file, optimize) {
         report_error(&code, &err);
-        // This is not code error handling, but :P
+        // This is not good error handling, but :P
         exit(1);
     }
 }
@@ -48,8 +48,8 @@ fn build(optimize: bool, input_file: &str, output_file: &str) {
 
     ir(optimize, input_file, ir_file);
 
-    let llc = find_exe(vec!["llc-14", "llc"]).expect("llc binary not found");
-    let gcc = find_exe(vec!["clang", "gcc"]).expect("gcc/clang not found on system");
+    let llc = find_exe(&["llc-14", "llc"]).expect("llc binary not found");
+    let gcc = find_exe(&["clang", "gcc"]).expect("gcc/clang not found on system");
 
     compile_to_obj(llc, ir_file, obj_file);
     compile_to_exe(gcc, obj_file, output_file);

@@ -125,7 +125,7 @@ impl<'ctx> Compiler<'ctx> {
         match type_ {
             TypeInformation::Number => self.context.i32_type().as_basic_type_enum(),
             TypeInformation::Boolean => self.context.bool_type().as_basic_type_enum(),
-            TypeInformation::StringOwned | TypeInformation::StringBorrow => self
+            TypeInformation::String(_) => self
                 .context
                 .i8_type()
                 .ptr_type(AddressSpace::Generic)
@@ -134,7 +134,7 @@ impl<'ctx> Compiler<'ctx> {
     }
 
     fn free_if_needed(&self, value: BasicValueEnum, type_: TypeInformation) {
-        if let TypeInformation::StringOwned = type_ {
+        if let TypeInformation::String(true) = type_ {
             let free_function = self.module.get_function("free").unwrap();
             self.builder
                 .build_call(free_function, &[value.into()], "Free_Tmp_String");
@@ -236,11 +236,8 @@ impl<'ctx> Compiler<'ctx> {
                 match exp.metadata().type_information.unwrap() {
                     TypeInformation::Number
                     | TypeInformation::Boolean
-                    | TypeInformation::StringBorrow => {
+                    | TypeInformation::String(_) => {
                         self.builder.build_load(*stack_ptr, "Var_Load")
-                    }
-                    TypeInformation::StringOwned => {
-                        unreachable!("A var should always produce a Borrowed string")
                     }
                 }
             }
@@ -252,7 +249,7 @@ impl<'ctx> Compiler<'ctx> {
 
         let format_string = match to_print.metadata().type_information.unwrap() {
             TypeInformation::Boolean | TypeInformation::Number => "%d\n", // TODO: make something better for this
-            TypeInformation::StringBorrow | TypeInformation::StringOwned => "%s\n",
+            TypeInformation::String(_) => "%s\n",
         };
 
         let printf_function = self.module.get_function("printf").unwrap();
@@ -292,7 +289,7 @@ impl<'ctx> Compiler<'ctx> {
                     let bool_type = self.context.bool_type();
                     self.builder.build_alloca(bool_type, "Stack_Pointer")
                 }
-                TypeInformation::StringBorrow => {
+                TypeInformation::String(_) => {
                     let i8_ptr_type = self.context.i8_type().ptr_type(AddressSpace::Generic);
                     let size_t = self.context.i64_type();
 
@@ -311,7 +308,6 @@ impl<'ctx> Compiler<'ctx> {
 
                     stack_pointer
                 }
-                TypeInformation::StringOwned => unreachable!("Var is always a string borrowed."),
             };
 
             function_context.var_pointers.insert(name.clone(), pointer);
@@ -329,13 +325,18 @@ impl<'ctx> Compiler<'ctx> {
             TypeInformation::Number | TypeInformation::Boolean => {
                 self.builder.build_store(*pointer, expr_value);
             }
-            TypeInformation::StringBorrow => {
+            TypeInformation::String(_) => {
                 // Allocate space for new string
                 // check is we have a borrowed or owned string
                 let existing_heap_pointer = self.builder.build_load(*pointer, "Existing_String");
+                let expr_value = self.builder.build_pointer_cast(
+                    expr_value.into_pointer_value(),
+                    self.context.i8_type().ptr_type(AddressSpace::Generic),
+                    "Expr Value"
+                );
 
                 match expr.metadata().type_information.unwrap() {
-                    TypeInformation::StringOwned => {
+                    TypeInformation::String(true) => {
                         // We own it, lets just use it!
                         // free existing string
                         let free_function = self.module.get_function("free").unwrap();
@@ -346,7 +347,7 @@ impl<'ctx> Compiler<'ctx> {
                         // store new pointer
                         self.builder.build_store(*pointer, expr_value);
                     }
-                    TypeInformation::StringBorrow => {
+                    TypeInformation::String(false) => {
                         // get size of new string
                         let strlen_function = self.module.get_function("strlen").unwrap();
                         let string_length = self
@@ -381,7 +382,6 @@ impl<'ctx> Compiler<'ctx> {
                     _ => unreachable!("Should always be string type"),
                 }
             }
-            TypeInformation::StringOwned => unreachable!(),
         }
     }
 
@@ -394,27 +394,29 @@ impl<'ctx> Compiler<'ctx> {
 
             match type_ {
                 TypeInformation::Number | TypeInformation::Boolean => {}
-                TypeInformation::StringBorrow => {
+                TypeInformation::String(_) => {
+                    let heap_pointer = self.builder.build_load(*pointer, "HeapPointer");
                     self.builder.build_call(
                         free_function,
-                        &[pointer.as_basic_value_enum().into()],
+                        &[heap_pointer.into()],
                         "Free_String",
                     );
                 }
-                TypeInformation::StringOwned => unreachable!(),
             }
         }
     }
 
     fn compile_return(&self, expr: &ast::Expression) {
+        self.free_used_vars();
+
         let type_ = expr.metadata().type_information.unwrap();
         let value = self.compile_expression(expr);
 
         match type_ {
-            TypeInformation::Number | TypeInformation::Boolean | TypeInformation::StringOwned => {
+            TypeInformation::Number | TypeInformation::Boolean | TypeInformation::String(true) => {
                 self.builder.build_return(Some(&value));
             }
-            TypeInformation::StringBorrow => {
+            TypeInformation::String(false) => {
                 let value = self.get_owned_string(value);
                 self.builder.build_return(Some(&value));
             }
@@ -511,7 +513,6 @@ impl<'ctx> Compiler<'ctx> {
         for stmt in code.0 {
             self.compile_statement(stmt);
         }
-        self.free_used_vars();
     }
 
     fn compile_toplevel_statement(&mut self, stmt: ast::TopLevelStatement) {

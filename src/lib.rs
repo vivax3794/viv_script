@@ -78,16 +78,13 @@ pub fn run_exe(exe: &str) -> i32 {
     exit.code().unwrap_or_else(|| exit.signal().unwrap())
 }
 
-/// Lists are given in order first
 #[must_use]
-pub fn find_exe(possible_names: Vec<&str>) -> Option<PathBuf> {
-    for name in possible_names {
-        if let Some(path) = find_on_path(name) {
-            return Some(path);
-        }
-    }
-
-    None
+pub fn find_exe(possible_names: &[&str]) -> Option<PathBuf> {
+    possible_names
+        .iter()
+        .map(|name| find_on_path(name))
+        .find(std::option::Option::is_some)
+        .flatten()
 }
 
 #[must_use]
@@ -95,12 +92,7 @@ fn find_on_path(name: &str) -> Option<PathBuf> {
     let path_env = std::env::var("PATH").expect("PATH env var not found!");
     let path_env = std::env::split_paths(&path_env);
 
-    for path in path_env {
-        let to_check = path.join(name);
-        if to_check.exists() {
-            return Some(to_check);
-        }
-    }
-
-    None
+    path_env
+        .map(|path| path.join(name))
+        .find(|to_check| to_check.exists())
 }
