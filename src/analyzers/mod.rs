@@ -46,7 +46,8 @@ trait Analyzer {
                 var_name: _,
                 expression: expr,
             }
-            | ast::Statement::Return(expr) => self._visit_expression(expr)?,
+            | ast::Statement::Return(expr)
+            | ast::Statement::Test(_, expr) => self._visit_expression(expr)?,
         }
 
         self.visit_stmt(statement)

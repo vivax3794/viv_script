@@ -45,14 +45,18 @@ impl TypeAnalyzer {
                 | ast::Operator::Div => TypeInformation::Number,
                 ast::Operator::Equal => TypeInformation::Boolean,
             },
-            TypeInformation::Boolean => return Err((
-                source_location,
-                format!("Unsupported operator for boolean {:?}", operator),
-            )),
-            TypeInformation::String(_) => return Err((
-                source_location,
-                format!("Unsupported operator for String {:?}", operator),
-            )),
+            TypeInformation::Boolean => {
+                return Err((
+                    source_location,
+                    format!("Unsupported operator for boolean {:?}", operator),
+                ))
+            }
+            TypeInformation::String(_) => {
+                return Err((
+                    source_location,
+                    format!("Unsupported operator for String {:?}", operator),
+                ))
+            }
         };
 
         metadata.type_information = Some(resulting_type);
@@ -91,12 +95,12 @@ impl super::Analyzer for TypeAnalyzer {
     fn visit_stmt(&mut self, stmt: &mut ast::Statement) -> crate::CompilerResult<()> {
         match stmt {
             ast::Statement::Print(_) => {}
-            ast::Statement::Assert(expr) => {
+            ast::Statement::Assert(expr) | ast::Statement::Test(_, expr) => {
                 let expr_type = expr.metadata().type_information.unwrap();
                 if expr_type != TypeInformation::Boolean {
                     return Err((
                         *expr.location(),
-                        format!("Expected Boolean, got {:?}", expr_type)
+                        format!("Expected Boolean, got {:?}", expr_type),
                     ));
                 }
             }

@@ -115,6 +115,7 @@ impl Lexer {
                         _ => self.emit_token(1, TokenValue::Equal)
                     }
                 },
+                ',' => self.emit_token(1, TokenValue::Comma),
                 '(' => self.emit_token(1, TokenValue::OpenParen),
                 ')' => self.emit_token(1, TokenValue::CloseParen),
                 '{' => self.emit_token(1, TokenValue::OpenBracket),
@@ -149,6 +150,8 @@ impl Lexer {
                         "return" => self.emit_token(6, TokenValue::Return),
                         "true" => self.emit_token(4, TokenValue::True),
                         "false" => self.emit_token(5, TokenValue::False),
+                        "test" => self.emit_token(4, TokenValue::Test),
+                        "is" => self.emit_token(2, TokenValue::Is),
                         _ => self.emit_token(word.len(), TokenValue::Identifier(word)),
                     }
                 }

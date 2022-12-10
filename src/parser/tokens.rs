@@ -12,6 +12,8 @@ pub enum TokenValue {
     // KEYWORDS
     Print,
     Assert,
+    Test,
+    Is,
     
     // SYMBOLS
     Semicolon,
@@ -19,6 +21,7 @@ pub enum TokenValue {
     Plus,
     Star,
     ForwardSlash,
+    Comma,
 
     Equal,
     EqualEqual,

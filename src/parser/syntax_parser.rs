@@ -171,12 +171,29 @@ impl SyntaxParser {
         Ok(ast::Statement::Assert(expression))
     }
 
+    fn parse_test(&mut self) -> CompilerResult<ast::Statement> {
+        self.advance();
+        let name = self.advance();
+        let name = match name.value {
+            TokenValue::String(value) => value,
+            _ => return Err((name.source_location, "Expected String for name of test.".to_string()))
+        };
+
+        self.expect(&TokenValue::Arrow)?;
+        let left = self.parse_expression()?;
+        self.expect(&TokenValue::Semicolon)?;
+
+
+        Ok(ast::Statement::Test(name, left))
+    }
+
     fn parse_statement(&mut self) -> CompilerResult<Option<ast::Statement>> {
         match self.peek() {
             TokenValue::Print => self.parse_print().map(Some),
             TokenValue::Assert => self.parse_assert().map(Some),
             TokenValue::Identifier(_) => self.parse_assignment().map(Some),
             TokenValue::Return => self.parse_return().map(Some),
+            TokenValue::Test => self.parse_test().map(Some),
             _ => Ok(None),
         }
     }

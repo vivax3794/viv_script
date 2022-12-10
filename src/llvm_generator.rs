@@ -236,9 +236,7 @@ impl<'ctx> Compiler<'ctx> {
                 match exp.metadata().type_information.unwrap() {
                     TypeInformation::Number
                     | TypeInformation::Boolean
-                    | TypeInformation::String(_) => {
-                        self.builder.build_load(*stack_ptr, "Var_Load")
-                    }
+                    | TypeInformation::String(_) => self.builder.build_load(*stack_ptr, "Var_Load"),
                 }
             }
         }
@@ -332,7 +330,7 @@ impl<'ctx> Compiler<'ctx> {
                 let expr_value = self.builder.build_pointer_cast(
                     expr_value.into_pointer_value(),
                     self.context.i8_type().ptr_type(AddressSpace::Generic),
-                    "Expr Value"
+                    "Expr Value",
                 );
 
                 match expr.metadata().type_information.unwrap() {
@@ -396,11 +394,8 @@ impl<'ctx> Compiler<'ctx> {
                 TypeInformation::Number | TypeInformation::Boolean => {}
                 TypeInformation::String(_) => {
                     let heap_pointer = self.builder.build_load(*pointer, "HeapPointer");
-                    self.builder.build_call(
-                        free_function,
-                        &[heap_pointer.into()],
-                        "Free_String",
-                    );
+                    self.builder
+                        .build_call(free_function, &[heap_pointer.into()], "Free_String");
                 }
             }
         }
@@ -476,6 +471,91 @@ impl<'ctx> Compiler<'ctx> {
         self.builder.position_at_end(success_block);
     }
 
+    fn compile_test(&mut self, name: String, expr: &ast::Expression) {
+        // lets prefix the name with the current file
+        let name = self
+            .module
+            .get_source_file_name()
+            .to_str()
+            .unwrap()
+            .to_owned()
+            + "/"
+            + &name;
+
+        let abort = self.module.get_function("abort").unwrap();
+        let printf = self.module.get_function("printf").unwrap();
+
+        let expr_value = self.compile_expression(expr).into_int_value();
+        let line_num = expr.location().line_start;
+
+        let current_block = self.builder.get_insert_block().unwrap();
+        let abort_block = self
+            .context
+            .insert_basic_block_after(current_block, &format!("{}L_Test_Fail", line_num));
+        let success_block = self
+            .context
+            .insert_basic_block_after(abort_block, &format!("{}L_Test_Ok", line_num));
+
+        self.builder
+            .build_conditional_branch(expr_value, success_block, abort_block);
+
+        let format_string = unsafe {
+            self.builder
+                .build_global_string("%s\n", "Test_Msg_Format_String")
+        };
+
+        // Crash and burn
+        self.builder.position_at_end(abort_block);
+
+        let msg_string = unsafe {
+            self.builder
+                .build_global_string(
+                    &format!("\x1b[32mtest\x1b[0m {} \x1b[31mFAILED\x1b[0m", name),
+                    "Test_Fail_String",
+                )
+                .as_pointer_value()
+        };
+        let printf_arguments = [
+            self.builder
+                .build_pointer_cast(
+                    format_string.as_pointer_value(),
+                    self.context.i8_type().ptr_type(AddressSpace::Generic),
+                    "Format_String",
+                )
+                .into(),
+            msg_string.into(),
+        ];
+        self.builder
+            .build_call(printf, &printf_arguments, "Test_Fail_Printf");
+        self.builder
+            .build_call(abort, &[], &format!("{}L_Test_Abort_Call", line_num));
+        self.builder.build_unreachable();
+
+        // Continue to build on the success branch
+        self.builder.position_at_end(success_block);
+
+        let msg_string = unsafe {
+            self.builder
+                .build_global_string(
+                    &format!("\x1b[32mtest\x1b[0m {} \x1b[32mOK\x1b[0m", name),
+                    "Test_Ok_String",
+                )
+                .as_pointer_value()
+        };
+        let printf_arguments = [
+            self.builder
+                .build_pointer_cast(
+                    format_string.as_pointer_value(),
+                    self.context.i8_type().ptr_type(AddressSpace::Generic),
+                    "Format_String",
+                )
+                .into(),
+            msg_string.into(),
+        ];
+        self.builder
+            .build_call(printf, &printf_arguments, "Test_Ok_Printf");
+    }
+
     fn compile_statement(&mut self, stmt: ast::Statement) {
         match stmt {
             ast::Statement::Print(expr) => self.compile_print(&expr),
@@ -487,6 +567,7 @@ impl<'ctx> Compiler<'ctx> {
                 expression: exp,
             } => self.compile_assignment(&name, &exp),
             ast::Statement::Return(expr) => self.compile_return(&expr),
+            ast::Statement::Test(name, expr) => self.compile_test(name, &expr),
         }
     }
 

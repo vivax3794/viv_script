@@ -33,6 +33,7 @@ pub enum Statement {
     /// A print statement is used to output the value of a expression
     Print(Expression),
     Assert(Expression),
+    Test(String, Expression),
     /// An assignment stores the value of a expression in the provided name
     Assignment {
         expression_location: SourceLocation,
