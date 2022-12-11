@@ -1,0 +1,9 @@
+fn main() -> Num {
+    test "+" -> 1 + 2 == 3;
+    test "-" -> 2 - 1 == 1;
+    test "*" -> 2 * 3 == 6;
+    test "/" -> 4 / 2 == 2;
+    test "/ rounding" -> 5 / 2 == 2;
+
+    return 0;
+}

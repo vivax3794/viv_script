@@ -1,0 +1,10 @@
+fn main() -> Num {
+    hello = 5;
+    test "directly" -> hello == 5;
+    test "in expression" -> hello + 2 == 7;
+
+    hello = 10;
+    test "overwrite" -> hello == 10;
+
+    return 0;
+}

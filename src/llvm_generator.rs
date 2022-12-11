@@ -473,14 +473,17 @@ impl<'ctx> Compiler<'ctx> {
 
     fn compile_test(&mut self, name: String, expr: &ast::Expression) {
         // lets prefix the name with the current file
-        let name = self
-            .module
-            .get_source_file_name()
-            .to_str()
-            .unwrap()
-            .to_owned()
-            + "/"
-            + &name;
+        let padding_length = 20 - (3 + name.len());
+        let name = format!(
+            "\x1b[36m{}{}\x1b[33m{}\x1b[0m",
+            &name,
+            " ".repeat(padding_length),
+            self.module
+                .get_source_file_name()
+                .to_str()
+                .unwrap()
+                .to_owned()
+        );
 
         let abort = self.module.get_function("abort").unwrap();
         let printf = self.module.get_function("printf").unwrap();
@@ -489,15 +492,15 @@ impl<'ctx> Compiler<'ctx> {
         let line_num = expr.location().line_start;
 
         let current_block = self.builder.get_insert_block().unwrap();
-        let abort_block = self
+        let fail_block = self
             .context
             .insert_basic_block_after(current_block, &format!("{}L_Test_Fail", line_num));
         let success_block = self
             .context
-            .insert_basic_block_after(abort_block, &format!("{}L_Test_Ok", line_num));
+            .insert_basic_block_after(fail_block, &format!("{}L_Test_Ok", line_num));
 
         self.builder
-            .build_conditional_branch(expr_value, success_block, abort_block);
+            .build_conditional_branch(expr_value, success_block, fail_block);
 
         let format_string = unsafe {
             self.builder
@@ -505,12 +508,12 @@ impl<'ctx> Compiler<'ctx> {
         };
 
         // Crash and burn
-        self.builder.position_at_end(abort_block);
+        self.builder.position_at_end(fail_block);
 
         let msg_string = unsafe {
             self.builder
                 .build_global_string(
-                    &format!("\x1b[32mtest\x1b[0m {} \x1b[31mFAILED\x1b[0m", name),
+                    &format!("\x1b[31mFAILED {}\x1b[0m", name),
                     "Test_Fail_String",
                 )
                 .as_pointer_value()
@@ -536,10 +539,7 @@ impl<'ctx> Compiler<'ctx> {
 
         let msg_string = unsafe {
             self.builder
-                .build_global_string(
-                    &format!("\x1b[32mtest\x1b[0m {} \x1b[32mOK\x1b[0m", name),
-                    "Test_Ok_String",
-                )
+                .build_global_string(&format!("\x1b[32mOK {}\x1b[0m", name), "Test_Ok_String")
                 .as_pointer_value()
         };
         let printf_arguments = [
