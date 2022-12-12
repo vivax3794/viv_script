@@ -20,15 +20,14 @@ sudo apt install llvm-14 zlib1g-dev libclang-common-14-dev build-essential
 
 Create your test file, we will use `test.viv` for this example
 ```
-print "Hello World!";
+fn main() -> Num {
+    print "Hello world!";
+
+    return 0;
+}
 ```
 
 Compile your amazing code!
 ```
-cargo run -- test.viv test
-```
-
-Now you can run it! 
-```bash
-./test
+cargo run -- run test.viv
 ```
