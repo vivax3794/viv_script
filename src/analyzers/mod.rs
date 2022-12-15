@@ -31,6 +31,16 @@ trait Analyzer {
                 self._visit_expression(left.as_mut())?;
                 self._visit_expression(right.as_mut())?;
             }
+            ast::Expression::ComparisonChain {
+                first_element,
+                comparisons,
+                ..
+            } => {
+                self._visit_expression(first_element.as_mut())?;
+                for (_, expr) in comparisons {
+                    self._visit_expression(expr)?;
+                }
+            }
             ast::Expression::Var(_, _) | ast::Expression::Literal(_, _) => {}
         }
 

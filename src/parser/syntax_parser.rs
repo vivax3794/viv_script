@@ -4,7 +4,7 @@ use super::{
     tokens::{Token, TokenValue},
     SourceLocation,
 };
-use crate::{ast, CompilerResult};
+use crate::{ast, llvm_generator::Compiler, CompilerResult};
 
 pub struct SyntaxParser {
     tokens: VecDeque<Token>,
@@ -70,7 +70,10 @@ impl SyntaxParser {
             }
         };
 
-        Ok(ast::Expression::Literal(token.source_location.into(), literal))
+        Ok(ast::Expression::Literal(
+            token.source_location.into(),
+            literal,
+        ))
     }
 
     fn parse_group(&mut self) -> CompilerResult<ast::Expression> {
@@ -87,9 +90,6 @@ impl SyntaxParser {
 
     fn parse_binary_expression(&mut self, level: usize) -> CompilerResult<ast::Expression> {
         let operator_precedence_levels: Vec<Vec<(TokenValue, ast::Operator)>> = vec![
-            vec![
-                (TokenValue::EqualEqual, ast::Operator::Equal)
-            ],
             vec![
                 (TokenValue::Plus, ast::Operator::Add),
                 (TokenValue::Minus, ast::Operator::Sub),
@@ -112,7 +112,11 @@ impl SyntaxParser {
                     self.advance();
                     let right_expression = self.parse_binary_expression(level + 1)?;
                     left_expression = ast::Expression::Binary {
-                        metadata: SourceLocation::combine(left_expression.location(), right_expression.location()).into(),
+                        metadata: SourceLocation::combine(
+                            left_expression.location(),
+                            right_expression.location(),
+                        )
+                        .into(),
                         left: Box::new(left_expression),
                         operator: *operator,
                         right: Box::new(right_expression),
@@ -128,8 +132,38 @@ impl SyntaxParser {
         Ok(left_expression)
     }
 
+    fn parse_comparison(&mut self) -> CompilerResult<ast::Expression> {
+        let first = self.parse_binary_expression(0)?;
+        let mut chains = Vec::new();
+
+        loop {
+            let comp = match self.peek() {
+                TokenValue::EqualEqual => ast::Comparison::Equal,
+                _ => break,
+            };
+            self.advance();
+            let right = self.parse_binary_expression(0)?;
+
+            chains.push((comp, right));
+        }
+
+        if chains.is_empty() {
+            Ok(first)
+        } else {
+            let location = chains
+                .iter()
+                .map(|(_, expr)| *expr.location())
+                .fold(*first.location(), |a, b| SourceLocation::combine(&a, &b));
+            Ok(ast::Expression::ComparisonChain {
+                first_element: Box::new(first.clone()),
+                comparisons: chains,
+                metadata: ast::ExpressionMetadata::from(location),
+            })
+        }
+    }
+
     fn parse_expression(&mut self) -> CompilerResult<ast::Expression> {
-        self.parse_binary_expression(0)
+        self.parse_comparison()
     }
 
     fn parse_print(&mut self) -> CompilerResult<ast::Statement> {
@@ -176,13 +210,17 @@ impl SyntaxParser {
         let name = self.advance();
         let name = match name.value {
             TokenValue::String(value) => value,
-            _ => return Err((name.source_location, "Expected String for name of test.".to_string()))
+            _ => {
+                return Err((
+                    name.source_location,
+                    "Expected String for name of test.".to_string(),
+                ))
+            }
         };
 
         self.expect(&TokenValue::Arrow)?;
         let left = self.parse_expression()?;
         self.expect(&TokenValue::Semicolon)?;
-
 
         Ok(ast::Statement::Test(name, left))
     }

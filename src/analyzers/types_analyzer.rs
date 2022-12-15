@@ -27,7 +27,7 @@ impl TypeAnalyzer {
         let source_location =
             SourceLocation::combine(left_expression.location(), right_expression.location());
 
-        if left_type != right_type {
+        if !TypeInformation::same_type(left_type, right_type) {
             return Err((
                 source_location,
                 format!(
@@ -43,7 +43,6 @@ impl TypeAnalyzer {
                 | ast::Operator::Sub
                 | ast::Operator::Mul
                 | ast::Operator::Div => TypeInformation::Number,
-                ast::Operator::Equal => TypeInformation::Boolean,
             },
             TypeInformation::Boolean => {
                 return Err((
@@ -60,6 +59,41 @@ impl TypeAnalyzer {
         };
 
         metadata.type_information = Some(resulting_type);
+
+        Ok(())
+    }
+
+    fn analyze_comparison(
+        metadata: &mut ast::ExpressionMetadata,
+        first: &ast::Expression,
+        chains: &Vec<(ast::Comparison, ast::Expression)>,
+    ) -> crate::CompilerResult<()> {
+        let type_ = first.metadata().type_information.unwrap();
+
+        let valid_comparisons = match type_ {
+            TypeInformation::Number => vec![ast::Comparison::Equal],
+            TypeInformation::Boolean => vec![],
+            TypeInformation::String(_) => vec![],
+        };
+
+        for (comp, value) in chains {
+            let value_type = value.metadata().type_information.unwrap();
+            if !TypeInformation::same_type(type_, value_type) {
+                return Err((
+                    SourceLocation::combine(first.location(), value.location()),
+                    format!("Expected all expression in comparison chain to have same type, got {:?} and {:?}", type_, value_type)
+                ));
+            }
+
+            if !valid_comparisons.contains(comp) {
+                return Err((
+                    metadata.location,
+                    format!("Not a valid comparison for {type_:?}, valid comps are {valid_comparisons:?}")
+                ))
+            }
+        }
+
+        metadata.type_information = Some(TypeInformation::Boolean);
 
         Ok(())
     }
@@ -83,6 +117,11 @@ impl super::Analyzer for TypeAnalyzer {
             } => {
                 TypeAnalyzer::analyze_binary(metadata, left, *operator, right)?;
             }
+            ast::Expression::ComparisonChain {
+                first_element,
+                comparisons,
+                metadata,
+            } => TypeAnalyzer::analyze_comparison(metadata, &first_element, &comparisons)?,
             ast::Expression::Var(metadata, var_name) => match self.var_types.get(var_name) {
                 Some(type_) => metadata.type_information = Some(*type_),
                 None => return Err((metadata.location, format!("Name {} not defined", var_name))),

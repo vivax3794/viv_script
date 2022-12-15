@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use inkwell::{
     builder::Builder,
@@ -6,7 +6,7 @@ use inkwell::{
     module::Module,
     passes::PassManager,
     types::{BasicType, BasicTypeEnum},
-    values::{BasicValue, BasicValueEnum, PointerValue},
+    values::{BasicValue, BasicValueEnum, IntValue, PointerValue},
     AddressSpace,
 };
 
@@ -216,18 +216,51 @@ impl<'ctx> Compiler<'ctx> {
                             .builder
                             .build_int_signed_div(left_value, right_value, "Number_Div")
                             .as_basic_value_enum(),
-                        ast::Operator::Equal => self
-                            .builder
-                            .build_int_compare(
-                                inkwell::IntPredicate::EQ,
-                                left_value,
-                                right_value,
-                                "Number_Eq",
-                            )
-                            .as_basic_value_enum(),
                     },
                     _ => unreachable!(),
                 }
+            }
+            ast::Expression::ComparisonChain {
+                first_element,
+                comparisons,
+                ..
+            } => {
+                let mut bool_values: Vec<IntValue> = Vec::with_capacity(comparisons.len());
+
+                let mut left = self.compile_expression(first_element);
+                let mut comparisons = VecDeque::from(comparisons.clone());
+
+                // Calculate comparisons
+                while !comparisons.is_empty() {
+                    let (comp, right) = comparisons.pop_front().unwrap();
+                    let right = self.compile_expression(&right);
+
+                    let bool_value = match first_element.metadata().type_information.unwrap() {
+                        TypeInformation::Number => match comp {
+                            ast::Comparison::Equal => self.builder.build_int_compare(
+                                inkwell::IntPredicate::EQ,
+                                left.into_int_value(),
+                                right.into_int_value(),
+                                "Comparison_Chain",
+                            ),
+                        },
+                        TypeInformation::Boolean => unreachable!(),
+                        TypeInformation::String(_) => unreachable!(),
+                    };
+                    bool_values.push(bool_value);
+                    left = right;
+                }
+
+                // 1 == 2 == 3
+                // at this point we have the result of 1 == 2, 2 == 3
+
+                bool_values
+                    .into_iter()
+                    .reduce(|left, right| {
+                        self.builder.build_and(left, right, "Comparison_Chain_And")
+                    })
+                    .unwrap()
+                    .as_basic_value_enum()
             }
             ast::Expression::Var(_, ref name) => {
                 let function_context = self.function_context.as_ref().unwrap();

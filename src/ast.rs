@@ -56,6 +56,14 @@ pub enum Expression {
         right: Box<Expression>,
         metadata: ExpressionMetadata,
     },
+    // 1 == 1
+    // 1 == 1 == 1
+    // 1 == 1 >= 0
+    ComparisonChain {
+        first_element: Box<Expression>,
+        comparisons: Vec<(Comparison, Expression)>,
+        metadata: ExpressionMetadata,
+    },
     /// Loads a value as stored by the assignment expression
     Var(ExpressionMetadata, String),
 }
@@ -80,7 +88,8 @@ impl Expression {
         match self {
             Expression::Literal(meta, _)
             | Expression::Binary { metadata: meta, .. }
-            | Expression::Var(meta, _) => meta,
+            | Expression::Var(meta, _)
+            | Expression::ComparisonChain { metadata: meta, .. } => meta,
         }
     }
 
@@ -97,7 +106,10 @@ pub enum Operator {
     Sub,
     Mul,
     Div,
+}
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum Comparison {
     Equal,
 }
 

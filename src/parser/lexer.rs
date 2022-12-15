@@ -171,7 +171,7 @@ impl Lexer {
             self.eat_whitespace();
         }
 
-        if !error.is_err() {
+        if error.is_ok() {
             self.emit_token(1, TokenValue::EndOfFile);
         }
 
