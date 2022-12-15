@@ -1,0 +1,24 @@
+fn main() -> Num {
+    if true {
+        test "no else - true" -> true;
+    }
+
+    if false {
+        test "no else - false" -> false;
+    }
+
+    if true {
+        test "true" -> true;
+    }
+    else {
+        test "true" -> false;
+    }
+
+    if false {
+        test "false" -> false;
+    } else {
+        test "false" -> true;
+    }
+
+    return 0;
+}
