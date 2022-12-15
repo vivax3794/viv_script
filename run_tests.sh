@@ -1,0 +1,1 @@
+cargo run -- test viv_tests ; cargo nextest run

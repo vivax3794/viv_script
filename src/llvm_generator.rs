@@ -242,14 +242,7 @@ impl<'ctx> Compiler<'ctx> {
         }
     }
 
-    fn compile_print(&self, to_print: &ast::Expression) {
-        let value = self.compile_expression(to_print);
-
-        let format_string = match to_print.metadata().type_information.unwrap() {
-            TypeInformation::Boolean | TypeInformation::Number => "%d\n", // TODO: make something better for this
-            TypeInformation::String(_) => "%s\n",
-        };
-
+    fn compile_printf(&self, format_string: &str, value: BasicValueEnum) {
         let printf_function = self.module.get_function("printf").unwrap();
         let format_string = unsafe {
             self.builder
@@ -269,8 +262,66 @@ impl<'ctx> Compiler<'ctx> {
 
         self.builder
             .build_call(printf_function, &printf_arguments, "Print_Statement");
+    }
 
-        self.free_if_needed(value, to_print.metadata().type_information.unwrap());
+    fn compile_print_number(&self, value: BasicValueEnum) {
+        self.compile_printf("%d\n", value);
+    }
+
+    fn compile_print_string(&self, type_: TypeInformation, value: BasicValueEnum) {
+        self.compile_printf("%s\n", value);
+        self.free_if_needed(value, type_);
+    }
+
+    fn compile_print_bool(&self, value: BasicValueEnum) {
+        let current_location = self.builder.get_insert_block().unwrap();
+        let true_branch = self
+            .context
+            .insert_basic_block_after(current_location, "True_Branch");
+        let false_branch = self
+            .context
+            .insert_basic_block_after(true_branch, "False_Branch");
+        let continue_branch = self
+            .context
+            .insert_basic_block_after(false_branch, "Continue_Branch");
+
+        // Jump
+        self.builder
+            .build_conditional_branch(value.into_int_value(), true_branch, false_branch);
+
+        // True
+        self.builder.position_at_end(true_branch);
+        let true_string = unsafe {
+            self.builder
+                .build_global_string("true", "True_String")
+                .as_pointer_value()
+        };
+        self.compile_printf("%s\n", true_string.as_basic_value_enum());
+        self.builder.build_unconditional_branch(continue_branch);
+
+        // False
+        self.builder.position_at_end(false_branch);
+        let false_string = unsafe {
+            self.builder
+                .build_global_string("false", "False_String")
+                .as_pointer_value()
+        };
+        self.compile_printf("%s\n", false_string.as_basic_value_enum());
+        self.builder.build_unconditional_branch(continue_branch);
+
+        // Continue
+        self.builder.position_at_end(continue_branch);
+    }
+
+    fn compile_print(&self, expression: &ast::Expression) {
+        let value = self.compile_expression(expression);
+        let type_ = expression.metadata().type_information.unwrap();
+
+        match type_ {
+            TypeInformation::Number => self.compile_print_number(value),
+            TypeInformation::String(_) => self.compile_print_string(type_, value),
+            TypeInformation::Boolean => self.compile_print_bool(value),
+        }
     }
 
     fn compile_var_allocations(&mut self) {
@@ -471,7 +522,7 @@ impl<'ctx> Compiler<'ctx> {
         self.builder.position_at_end(success_block);
     }
 
-    fn compile_test(&mut self, name: String, expr: &ast::Expression) {
+    fn compile_test(&mut self, name: &str, expr: &ast::Expression) {
         // lets prefix the name with the current file
         let padding_length = 20 - (3 + name.len());
         let name = format!(
@@ -567,7 +618,7 @@ impl<'ctx> Compiler<'ctx> {
                 expression: exp,
             } => self.compile_assignment(&name, &exp),
             ast::Statement::Return(expr) => self.compile_return(&expr),
-            ast::Statement::Test(name, expr) => self.compile_test(name, &expr),
+            ast::Statement::Test(name, expr) => self.compile_test(&name, &expr),
         }
     }
 
