@@ -236,20 +236,15 @@ impl<'ctx> Compiler<'ctx> {
                     let right = self.compile_expression(&right);
 
                     let bool_value = match first_element.metadata().type_information.unwrap() {
-                        TypeInformation::Number => match comp {
-                            ast::Comparison::Equal => self.builder.build_int_compare(
-                                inkwell::IntPredicate::EQ,
-                                left.into_int_value(),
-                                right.into_int_value(),
-                                "Comparison_Chain",
-                            ),
-                            ast::Comparison::NotEqual => self.builder.build_int_compare(
-                                inkwell::IntPredicate::NE,
-                                left.into_int_value(),
-                                right.into_int_value(),
-                                "Comparison_Chain",
-                            )
-                        },
+                        TypeInformation::Number => self.builder.build_int_compare(
+                            match comp {
+                                ast::Comparison::Equal => inkwell::IntPredicate::EQ,
+                                ast::Comparison::NotEqual => inkwell::IntPredicate::NE,
+                            },
+                            left.into_int_value(),
+                            right.into_int_value(),
+                            "Comparison_Chain",
+                        ),
                         TypeInformation::Boolean => unreachable!(),
                         TypeInformation::String(_) => unreachable!(),
                     };
