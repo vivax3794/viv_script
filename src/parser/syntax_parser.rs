@@ -140,6 +140,10 @@ impl SyntaxParser {
             let comp = match self.peek() {
                 TokenValue::EqualEqual => ast::Comparison::Equal,
                 TokenValue::BangEqual => ast::Comparison::NotEqual,
+                TokenValue::LessThan => ast::Comparison::LessThan,
+                TokenValue::LessThanEqual => ast::Comparison::LessThanEqual,
+                TokenValue::GreaterThan => ast::Comparison::GreaterThan,
+                TokenValue::GreaterThanEqual => ast::Comparison::GreaterThanEqual,
                 _ => break,
             };
             self.advance();

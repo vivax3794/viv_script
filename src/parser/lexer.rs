@@ -112,6 +112,20 @@ impl Lexer {
                     }
                     _ => self.emit_token(1, TokenValue::Equal),
                 },
+                '>' => match self.peek() {
+                    Some('=') => {
+                        self.advance();
+                        self.emit_token(2, TokenValue::GreaterThanEqual);
+                    },
+                    _ => self.emit_token(1, TokenValue::GreaterThan)
+                },
+                '<' => match self.peek() {
+                    Some('=') => {
+                        self.advance();
+                        self.emit_token(2, TokenValue::LessThanEqual);
+                    },
+                    _ => self.emit_token(1, TokenValue::LessThan)
+                },
                 '!' => {
                     let c = self.advance();
                     if let Some('=') = c {

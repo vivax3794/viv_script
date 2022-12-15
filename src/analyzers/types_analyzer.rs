@@ -71,7 +71,14 @@ impl TypeAnalyzer {
         let type_ = first.metadata().type_information.unwrap();
 
         let valid_comparisons = match type_ {
-            TypeInformation::Number => vec![ast::Comparison::Equal, ast::Comparison::NotEqual],
+            TypeInformation::Number => vec![
+                ast::Comparison::Equal,
+                ast::Comparison::NotEqual,
+                ast::Comparison::GreaterThan,
+                ast::Comparison::GreaterThanEqual,
+                ast::Comparison::LessThan,
+                ast::Comparison::LessThanEqual,
+            ],
             TypeInformation::Boolean => vec![],
             TypeInformation::String(_) => vec![],
         };
@@ -89,7 +96,7 @@ impl TypeAnalyzer {
                 return Err((
                     metadata.location,
                     format!("Not a valid comparison for {type_:?}, valid comps are {valid_comparisons:?}")
-                ))
+                ));
             }
         }
 

@@ -112,6 +112,10 @@ pub enum Operator {
 pub enum Comparison {
     Equal,
     NotEqual,
+    GreaterThan,
+    GreaterThanEqual,
+    LessThan,
+    LessThanEqual,
 }
 
 /// A literal is a hardcoded value

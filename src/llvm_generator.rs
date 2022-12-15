@@ -240,6 +240,10 @@ impl<'ctx> Compiler<'ctx> {
                             match comp {
                                 ast::Comparison::Equal => inkwell::IntPredicate::EQ,
                                 ast::Comparison::NotEqual => inkwell::IntPredicate::NE,
+                                ast::Comparison::GreaterThan => inkwell::IntPredicate::SGT,
+                                ast::Comparison::GreaterThanEqual => inkwell::IntPredicate::SGE,
+                                ast::Comparison::LessThan => inkwell::IntPredicate::SLT,
+                                ast::Comparison::LessThanEqual => inkwell::IntPredicate::SLE
                             },
                             left.into_int_value(),
                             right.into_int_value(),
