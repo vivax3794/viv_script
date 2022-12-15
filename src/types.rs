@@ -23,11 +23,11 @@ impl TypeInformation {
     }
 
     pub fn same_type(a: Self, b: Self) -> bool {
-        match (a, b) {
-            (Self::Number, Self::Number) => true,
-            (Self::Boolean, Self::Boolean) => true,
-            (Self::String(_), Self::String(_)) => true,
-            _ => false,
-        }
+        matches!(
+            (a, b),
+            (Self::Number, Self::Number)
+                | (Self::Boolean, Self::Boolean)
+                | (Self::String(_), Self::String(_))
+        )
     }
 }

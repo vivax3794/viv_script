@@ -1,5 +1,6 @@
 fn main() -> Num {
     test "==" -> 1 == 1 == 1;
+    test "order" -> 1 == 1 != 2;
 
     return 0;
 }

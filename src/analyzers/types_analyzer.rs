@@ -71,7 +71,7 @@ impl TypeAnalyzer {
         let type_ = first.metadata().type_information.unwrap();
 
         let valid_comparisons = match type_ {
-            TypeInformation::Number => vec![ast::Comparison::Equal],
+            TypeInformation::Number => vec![ast::Comparison::Equal, ast::Comparison::NotEqual],
             TypeInformation::Boolean => vec![],
             TypeInformation::String(_) => vec![],
         };
@@ -121,7 +121,7 @@ impl super::Analyzer for TypeAnalyzer {
                 first_element,
                 comparisons,
                 metadata,
-            } => TypeAnalyzer::analyze_comparison(metadata, &first_element, &comparisons)?,
+            } => TypeAnalyzer::analyze_comparison(metadata, first_element, comparisons)?,
             ast::Expression::Var(metadata, var_name) => match self.var_types.get(var_name) {
                 Some(type_) => metadata.type_information = Some(*type_),
                 None => return Err((metadata.location, format!("Name {} not defined", var_name))),

@@ -243,6 +243,12 @@ impl<'ctx> Compiler<'ctx> {
                                 right.into_int_value(),
                                 "Comparison_Chain",
                             ),
+                            ast::Comparison::NotEqual => self.builder.build_int_compare(
+                                inkwell::IntPredicate::NE,
+                                left.into_int_value(),
+                                right.into_int_value(),
+                                "Comparison_Chain",
+                            )
                         },
                         TypeInformation::Boolean => unreachable!(),
                         TypeInformation::String(_) => unreachable!(),

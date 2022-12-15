@@ -111,6 +111,7 @@ pub enum Operator {
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Comparison {
     Equal,
+    NotEqual,
 }
 
 /// A literal is a hardcoded value

@@ -4,7 +4,7 @@ use super::{
     tokens::{Token, TokenValue},
     SourceLocation,
 };
-use crate::{ast, llvm_generator::Compiler, CompilerResult};
+use crate::{ast, CompilerResult};
 
 pub struct SyntaxParser {
     tokens: VecDeque<Token>,
@@ -139,6 +139,7 @@ impl SyntaxParser {
         loop {
             let comp = match self.peek() {
                 TokenValue::EqualEqual => ast::Comparison::Equal,
+                TokenValue::BangEqual => ast::Comparison::NotEqual,
                 _ => break,
             };
             self.advance();

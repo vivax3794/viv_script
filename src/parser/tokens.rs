@@ -25,6 +25,7 @@ pub enum TokenValue {
 
     Equal,
     EqualEqual,
+    BangEqual,
 
     OpenParen,
     CloseParen,
