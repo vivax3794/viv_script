@@ -160,7 +160,7 @@ impl SyntaxParser {
                 .map(|(_, expr)| *expr.location())
                 .fold(*first.location(), |a, b| SourceLocation::combine(&a, &b));
             Ok(ast::Expression::ComparisonChain {
-                first_element: Box::new(first.clone()),
+                first_element: Box::new(first),
                 comparisons: chains,
                 metadata: ast::ExpressionMetadata::from(location),
             })
@@ -230,6 +230,29 @@ impl SyntaxParser {
         Ok(ast::Statement::Test(name, left))
     }
 
+    fn parse_if(&mut self) -> CompilerResult<ast::Statement> {
+        self.advance();
+
+        let condition = self.parse_expression()?;
+        let then = self.parse_codeblock()?;
+
+        let otherwise = if let TokenValue::Else = self.peek() {
+            self.advance();
+            match self.peek() {
+                TokenValue::If => ast::CodeBody(vec![self.parse_if()?]),
+                _ => self.parse_codeblock()?,
+            }
+        } else {
+            ast::CodeBody(Vec::new())
+        };
+
+        Ok(ast::Statement::If {
+            condition,
+            then,
+            otherwise,
+        })
+    }
+
     fn parse_statement(&mut self) -> CompilerResult<Option<ast::Statement>> {
         match self.peek() {
             TokenValue::Print => self.parse_print().map(Some),
@@ -237,6 +260,7 @@ impl SyntaxParser {
             TokenValue::Identifier(_) => self.parse_assignment().map(Some),
             TokenValue::Return => self.parse_return().map(Some),
             TokenValue::Test => self.parse_test().map(Some),
+            TokenValue::If => self.parse_if().map(Some),
             _ => Ok(None),
         }
     }

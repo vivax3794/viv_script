@@ -41,6 +41,11 @@ pub enum Statement {
         expression: Expression,
     },
     Return(Expression),
+    If {
+        condition: Expression,
+        then: CodeBody,
+        otherwise: CodeBody,
+    }
 }
 
 // An expression is the building block of the language. it usually does stuff.

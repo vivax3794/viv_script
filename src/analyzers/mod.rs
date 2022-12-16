@@ -58,17 +58,20 @@ trait Analyzer {
             }
             | ast::Statement::Return(expr)
             | ast::Statement::Test(_, expr) => self._visit_expression(expr)?,
+            ast::Statement::If { condition, then, otherwise } => {
+                self._visit_expression(condition)?;
+                self._visit_codebody(then)?;
+                self._visit_codebody(otherwise)?;
+            }
         }
 
         self.visit_stmt(statement)
     }
 
     fn _visit_codebody(&mut self, body: &mut ast::CodeBody) -> CompilerResult<()> {
-        for stmt in &mut body.0 {
-            self._visit_stmt(stmt)?;
-        }
-
-        Ok(())
+        body.0
+            .iter_mut()
+            .try_for_each(|stmt| self._visit_stmt(stmt))
     }
 
     fn _visit_toplevel(&mut self, statement: &mut ast::TopLevelStatement) -> CompilerResult<()> {

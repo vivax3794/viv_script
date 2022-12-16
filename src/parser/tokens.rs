@@ -14,6 +14,8 @@ pub enum TokenValue {
     Assert,
     Test,
     Is,
+    If,
+    Else,
     
     // SYMBOLS
     Semicolon,

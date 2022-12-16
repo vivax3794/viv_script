@@ -10,7 +10,7 @@ use inkwell::{
     AddressSpace,
 };
 
-use crate::ast;
+use crate::ast::{self, Expression};
 use crate::types::TypeInformation;
 
 struct FunctionContext<'ctx> {
@@ -243,7 +243,7 @@ impl<'ctx> Compiler<'ctx> {
                                 ast::Comparison::GreaterThan => inkwell::IntPredicate::SGT,
                                 ast::Comparison::GreaterThanEqual => inkwell::IntPredicate::SGE,
                                 ast::Comparison::LessThan => inkwell::IntPredicate::SLT,
-                                ast::Comparison::LessThanEqual => inkwell::IntPredicate::SLE
+                                ast::Comparison::LessThanEqual => inkwell::IntPredicate::SLE,
                             },
                             left.into_int_value(),
                             right.into_int_value(),
@@ -645,18 +645,61 @@ impl<'ctx> Compiler<'ctx> {
             .build_call(printf, &printf_arguments, "Test_Ok_Printf");
     }
 
-    fn compile_statement(&mut self, stmt: ast::Statement) {
-        match stmt {
-            ast::Statement::Print(expr) => self.compile_print(&expr),
+    fn compile_if(
+        &mut self,
+        condition: &Expression,
+        then: &ast::CodeBody,
+        otherwise: &ast::CodeBody,
+    ) {
+        let current_block = self.builder.get_insert_block().unwrap();
+        let true_case = self
+            .context
+            .insert_basic_block_after(current_block, "True_Case");
+        let false_case = self
+            .context
+            .insert_basic_block_after(true_case, "False_Case");
+        let continue_block = self
+            .context
+            .insert_basic_block_after(false_case, "Continue");
 
-            ast::Statement::Assert(expr) => self.compile_assert(&expr),
+        let condition_result = self.compile_expression(condition);
+        self.builder.build_conditional_branch(
+            condition_result.into_int_value(),
+            true_case,
+            false_case,
+        );
+
+        // True
+        self.builder.position_at_end(true_case);
+        self.compile_codeblock(then);
+        self.builder.build_unconditional_branch(continue_block);
+
+        // False
+        self.builder.position_at_end(false_case);
+        self.compile_codeblock(otherwise);
+        self.builder.build_unconditional_branch(continue_block);
+
+        // Continue
+        self.builder.position_at_end(continue_block);
+    }
+
+    fn compile_statement(&mut self, stmt: &ast::Statement) {
+        match stmt {
+            ast::Statement::Print(expr) => self.compile_print(expr),
+
+            ast::Statement::Assert(expr) => self.compile_assert(expr),
             ast::Statement::Assignment {
                 expression_location: _,
                 var_name: name,
                 expression: exp,
-            } => self.compile_assignment(&name, &exp),
-            ast::Statement::Return(expr) => self.compile_return(&expr),
-            ast::Statement::Test(name, expr) => self.compile_test(&name, &expr),
+            } => self.compile_assignment(name, exp),
+            ast::Statement::Return(expr) => self.compile_return(expr),
+            ast::Statement::Test(name, expr) => self.compile_test(name, expr),
+            ast::Statement::If {
+                condition,
+                then,
+                otherwise,
+            } => self.compile_if(condition, then, otherwise),
         }
     }
 
@@ -668,7 +711,7 @@ impl<'ctx> Compiler<'ctx> {
         self.module.add_function(name, function_type, None);
     }
 
-    fn compile_function(&mut self, name: &str, code: ast::CodeBody, meta: ast::FunctionMetadata) {
+    fn compile_function(&mut self, name: &str, code: &ast::CodeBody, meta: ast::FunctionMetadata) {
         let function = self.module.get_function(name).unwrap();
 
         let entry_block = self.context.append_basic_block(function, "entry");
@@ -680,7 +723,11 @@ impl<'ctx> Compiler<'ctx> {
         });
 
         self.compile_var_allocations();
-        for stmt in code.0 {
+        self.compile_codeblock(code);
+    }
+
+    fn compile_codeblock(&mut self, code: &ast::CodeBody) {
+        for stmt in &code.0 {
             self.compile_statement(stmt);
         }
     }
@@ -692,7 +739,7 @@ impl<'ctx> Compiler<'ctx> {
                 body,
                 metadata: meta,
                 ..
-            } => self.compile_function(&name, body, meta),
+            } => self.compile_function(&name, &body, meta),
         }
     }
 

@@ -194,6 +194,8 @@ impl Lexer {
             "false" => self.emit_token(5, TokenValue::False),
             "test" => self.emit_token(4, TokenValue::Test),
             "is" => self.emit_token(2, TokenValue::Is),
+            "if" => self.emit_token(2, TokenValue::If),
+            "else" => self.emit_token(4, TokenValue::Else),
             _ => self.emit_token(word.len(), TokenValue::Identifier(word)),
         }
     }

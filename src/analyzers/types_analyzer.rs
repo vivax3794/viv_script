@@ -185,6 +185,18 @@ impl super::Analyzer for TypeAnalyzer {
                         ),
                     ));
                 }
+            },
+            ast::Statement::If {condition, ..} => {
+                let condition_type = condition.metadata().type_information.unwrap();
+                if !TypeInformation::same_type(condition_type, TypeInformation::Boolean) {
+                    return Err((
+                        *condition.location(),
+                        format!(
+                            "Expected condition to be bool, got {:?}",
+                            condition_type
+                        )
+                    ))
+                }
             }
         }
 

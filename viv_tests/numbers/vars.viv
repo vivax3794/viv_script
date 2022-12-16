@@ -6,5 +6,10 @@ fn main() -> Num {
     hello = 10;
     test "overwrite" -> hello == 10;
 
+    if false {
+        not_defined = 10;
+    }
+    test "not defined" -> not_defined == 0;
+
     return 0;
 }

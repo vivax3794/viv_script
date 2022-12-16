@@ -20,5 +20,11 @@ fn main() -> Num {
         test "false" -> true;
     }
 
+    if false {
+        test "else if" -> false;
+    } else if true {
+        test "else if" -> true;
+    }
+
     return 0;
 }
