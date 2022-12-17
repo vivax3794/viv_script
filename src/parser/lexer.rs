@@ -127,19 +127,12 @@ impl Lexer {
                     _ => self.emit_token(1, TokenValue::LessThan)
                 },
                 '!' => {
-                    let c = self.advance();
+                    let c = self.peek();
                     if let Some('=') = c {
+                        self.advance();
                         self.emit_token(2, TokenValue::BangEqual);
                     } else {
-                        error = Err((
-                            SourceLocation::new(
-                                self.current_line,
-                                self.current_colum,
-                                self.current_colum,
-                            ),
-                            format!("Expected `=`, found {:?}", c),
-                        ));
-                        break;
+                        self.emit_token(1, TokenValue::Bang);
                     }
                 }
                 ',' => self.emit_token(1, TokenValue::Comma),

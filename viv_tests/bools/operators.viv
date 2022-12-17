@@ -1,4 +1,6 @@
 fn main() -> Num {
     test "!false" -> !false;
     test "!!true" -> !!true;
+
+    return 0;
 }

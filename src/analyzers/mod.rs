@@ -40,7 +40,8 @@ trait Analyzer {
                 for (_, expr) in comparisons {
                     self._visit_expression(expr)?;
                 }
-            }
+            },
+            ast::Expression::PrefixExpression { expression, ..} => self._visit_expression(expression)?,
             ast::Expression::Var(_, _) | ast::Expression::Literal(_, _) => {}
         }
 

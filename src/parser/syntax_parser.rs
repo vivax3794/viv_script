@@ -88,6 +88,22 @@ impl SyntaxParser {
         }
     }
 
+    fn parse_prefix(&mut self) -> CompilerResult<ast::Expression> {
+        let op = match self.peek() {
+            TokenValue::Bang => ast::PrefixOprator::Not,
+            _ => return self.parse_group(),
+        };
+        let location = self.advance().source_location;
+
+        let expr = self.parse_prefix()?;
+
+        Ok(ast::Expression::PrefixExpression {
+            op,
+            expression: Box::new(expr),
+            metadata: ast::ExpressionMetadata::from(location),
+        })
+    }
+
     fn parse_binary_expression(&mut self, level: usize) -> CompilerResult<ast::Expression> {
         let operator_precedence_levels: Vec<Vec<(TokenValue, ast::Operator)>> = vec![
             vec![
@@ -101,7 +117,7 @@ impl SyntaxParser {
         ];
 
         if level >= operator_precedence_levels.len() {
-            return self.parse_group();
+            return self.parse_prefix();
         }
 
         let mut left_expression = self.parse_binary_expression(level + 1)?;

@@ -69,6 +69,11 @@ pub enum Expression {
         comparisons: Vec<(Comparison, Expression)>,
         metadata: ExpressionMetadata,
     },
+    PrefixExpression {
+        op: PrefixOprator,
+        expression: Box<Expression>,
+        metadata: ExpressionMetadata,
+    },
     /// Loads a value as stored by the assignment expression
     Var(ExpressionMetadata, String),
 }
@@ -94,7 +99,8 @@ impl Expression {
             Expression::Literal(meta, _)
             | Expression::Binary { metadata: meta, .. }
             | Expression::Var(meta, _)
-            | Expression::ComparisonChain { metadata: meta, .. } => meta,
+            | Expression::ComparisonChain { metadata: meta, .. }
+            | Expression::PrefixExpression { metadata: meta, .. } => meta,
         }
     }
 
@@ -121,6 +127,11 @@ pub enum Comparison {
     GreaterThanEqual,
     LessThan,
     LessThanEqual,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum PrefixOprator {
+    Not,
 }
 
 /// A literal is a hardcoded value

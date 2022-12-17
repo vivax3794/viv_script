@@ -133,6 +133,25 @@ impl super::Analyzer for TypeAnalyzer {
                 Some(type_) => metadata.type_information = Some(*type_),
                 None => return Err((metadata.location, format!("Name {} not defined", var_name))),
             },
+            ast::Expression::PrefixExpression {
+                op,
+                expression,
+                metadata,
+            } => {
+                let type_ = match (op, expression.metadata().type_information.unwrap()) {
+                    (ast::PrefixOprator::Not, TypeInformation::Boolean) => TypeInformation::Boolean,
+                    _ => {
+                        return Err((
+                            *expression.location(),
+                            format!(
+                                "Invalid prefix operator for {:?}",
+                                expression.metadata().type_information.unwrap()
+                            ),
+                        ))
+                    }
+                };
+                metadata.type_information = Some(type_);
+            }
         }
 
         Ok(())
@@ -185,17 +204,14 @@ impl super::Analyzer for TypeAnalyzer {
                         ),
                     ));
                 }
-            },
-            ast::Statement::If {condition, ..} => {
+            }
+            ast::Statement::If { condition, .. } => {
                 let condition_type = condition.metadata().type_information.unwrap();
                 if !TypeInformation::same_type(condition_type, TypeInformation::Boolean) {
                     return Err((
                         *condition.location(),
-                        format!(
-                            "Expected condition to be bool, got {:?}",
-                            condition_type
-                        )
-                    ))
+                        format!("Expected condition to be bool, got {:?}", condition_type),
+                    ));
                 }
             }
         }

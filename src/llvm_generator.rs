@@ -276,6 +276,15 @@ impl<'ctx> Compiler<'ctx> {
                     | TypeInformation::Boolean
                     | TypeInformation::String(_) => self.builder.build_load(*stack_ptr, "Var_Load"),
                 }
+            },
+            ast::Expression::PrefixExpression { op, expression, .. } => {
+                let value = self.compile_expression(expression);
+                match expression.metadata().type_information.unwrap() {
+                    TypeInformation::Boolean => match op {
+                        ast::PrefixOprator::Not => self.builder.build_not(value.into_int_value(), "Not").as_basic_value_enum()
+                    },
+                    _ => unreachable!()
+                }
             }
         }
     }

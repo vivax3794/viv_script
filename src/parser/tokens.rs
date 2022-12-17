@@ -24,6 +24,7 @@ pub enum TokenValue {
     Star,
     ForwardSlash,
     Comma,
+    Bang,
 
     Equal,
     EqualEqual,
