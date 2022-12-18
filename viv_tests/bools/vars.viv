@@ -1,7 +1,0 @@
-fn main() -> Num {
-    nice = true;
-
-    test "True" -> nice;
-
-    return 0;
-}

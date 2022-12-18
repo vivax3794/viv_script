@@ -2,5 +2,10 @@ fn main() -> Num {
     test "!false" -> !false;
     test "!!true" -> !!true;
 
+    test "true && true" -> true && true;
+    test "false && true" -> !(false && true);
+    test "true && false" -> !(true && false);
+    test "false && false" -> !(false && false);
+
     return 0;
 }

@@ -107,6 +107,10 @@ impl Expression {
     pub fn location(&self) -> &SourceLocation {
         &self.metadata().location
     }
+
+    pub fn type_info(&self) -> &TypeInformation {
+        self.metadata().type_information.as_ref().unwrap()
+    }
 }
 
 /// A operator describes what action should be taken on the expressions of a binary-exp

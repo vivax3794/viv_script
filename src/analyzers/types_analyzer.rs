@@ -21,8 +21,8 @@ impl TypeAnalyzer {
         operator: ast::Operator,
         right_expression: &mut ast::Expression,
     ) -> crate::CompilerResult<()> {
-        let left_type = left_expression.metadata().type_information.unwrap();
-        let right_type = right_expression.metadata().type_information.unwrap();
+        let left_type = *left_expression.type_info();
+        let right_type = *right_expression.type_info();
 
         let source_location =
             SourceLocation::combine(left_expression.location(), right_expression.location());
@@ -68,7 +68,7 @@ impl TypeAnalyzer {
         first: &ast::Expression,
         chains: &Vec<(ast::Comparison, ast::Expression)>,
     ) -> crate::CompilerResult<()> {
-        let type_ = first.metadata().type_information.unwrap();
+        let type_ = *first.type_info();
 
         let valid_comparisons = match type_ {
             TypeInformation::Number => vec![
@@ -84,7 +84,7 @@ impl TypeAnalyzer {
         };
 
         for (comp, value) in chains {
-            let value_type = value.metadata().type_information.unwrap();
+            let value_type = *value.type_info();
             if !TypeInformation::same_type(type_, value_type) {
                 return Err((
                     SourceLocation::combine(first.location(), value.location()),
@@ -138,14 +138,14 @@ impl super::Analyzer for TypeAnalyzer {
                 expression,
                 metadata,
             } => {
-                let type_ = match (op, expression.metadata().type_information.unwrap()) {
+                let type_ = match (op, expression.type_info()) {
                     (ast::PrefixOprator::Not, TypeInformation::Boolean) => TypeInformation::Boolean,
                     _ => {
                         return Err((
                             *expression.location(),
                             format!(
                                 "Invalid prefix operator for {:?}",
-                                expression.metadata().type_information.unwrap()
+                                expression.type_info()
                             ),
                         ))
                     }
@@ -161,7 +161,7 @@ impl super::Analyzer for TypeAnalyzer {
         match stmt {
             ast::Statement::Print(_) => {}
             ast::Statement::Assert(expr) | ast::Statement::Test(_, expr) => {
-                let expr_type = expr.metadata().type_information.unwrap();
+                let expr_type = *expr.type_info();
                 if expr_type != TypeInformation::Boolean {
                     return Err((
                         *expr.location(),
@@ -175,12 +175,12 @@ impl super::Analyzer for TypeAnalyzer {
                 ..
             } => match self.var_types.get(var_name) {
                 None => {
-                    let type_ = expression.metadata().type_information.unwrap();
+                    let type_ = expression.type_info();
                     let type_ = type_.mark_borrowed();
                     self.var_types.insert(var_name.clone(), type_);
                 }
                 Some(expected_type) => {
-                    let expression_type = expression.metadata().type_information.unwrap();
+                    let expression_type = *expression.type_info();
 
                     if expression_type != *expected_type {
                         return Err((
@@ -194,19 +194,19 @@ impl super::Analyzer for TypeAnalyzer {
                 }
             },
             ast::Statement::Return(return_expression) => {
-                if self.return_type != return_expression.metadata().type_information.unwrap() {
+                if self.return_type != *return_expression.type_info() {
                     return Err((
                         *return_expression.location(),
                         format!(
                             "expected {:?}, got {:?}",
                             self.return_type,
-                            return_expression.metadata().type_information.unwrap()
+                            return_expression.type_info()
                         ),
                     ));
                 }
             }
             ast::Statement::If { condition, .. } => {
-                let condition_type = condition.metadata().type_information.unwrap();
+                let condition_type = *condition.type_info();
                 if !TypeInformation::same_type(condition_type, TypeInformation::Boolean) {
                     return Err((
                         *condition.location(),

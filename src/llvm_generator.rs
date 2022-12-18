@@ -198,7 +198,7 @@ impl<'ctx> Compiler<'ctx> {
                 let left_value = self.compile_expression(left).into_int_value();
                 let right_value = self.compile_expression(right).into_int_value();
 
-                match left.metadata().type_information.unwrap() {
+                match left.type_info() {
                     TypeInformation::Number => match operator {
                         ast::Operator::Add => self
                             .builder
@@ -235,7 +235,7 @@ impl<'ctx> Compiler<'ctx> {
                     let (comp, right) = comparisons.pop_front().unwrap();
                     let right = self.compile_expression(&right);
 
-                    let bool_value = match first_element.metadata().type_information.unwrap() {
+                    let bool_value = match first_element.type_info() {
                         TypeInformation::Number => self.builder.build_int_compare(
                             match comp {
                                 ast::Comparison::Equal => inkwell::IntPredicate::EQ,
@@ -271,7 +271,7 @@ impl<'ctx> Compiler<'ctx> {
                 let function_context = self.function_context.as_ref().unwrap();
                 let stack_ptr = function_context.var_pointers.get(name).unwrap();
 
-                match exp.metadata().type_information.unwrap() {
+                match exp.type_info() {
                     TypeInformation::Number
                     | TypeInformation::Boolean
                     | TypeInformation::String(_) => self.builder.build_load(*stack_ptr, "Var_Load"),
@@ -279,7 +279,7 @@ impl<'ctx> Compiler<'ctx> {
             },
             ast::Expression::PrefixExpression { op, expression, .. } => {
                 let value = self.compile_expression(expression);
-                match expression.metadata().type_information.unwrap() {
+                match expression.type_info() {
                     TypeInformation::Boolean => match op {
                         ast::PrefixOprator::Not => self.builder.build_not(value.into_int_value(), "Not").as_basic_value_enum()
                     },
@@ -362,11 +362,11 @@ impl<'ctx> Compiler<'ctx> {
 
     fn compile_print(&self, expression: &ast::Expression) {
         let value = self.compile_expression(expression);
-        let type_ = expression.metadata().type_information.unwrap();
+        let type_ = expression.type_info();
 
         match type_ {
             TypeInformation::Number => self.compile_print_number(value),
-            TypeInformation::String(_) => self.compile_print_string(type_, value),
+            TypeInformation::String(_) => self.compile_print_string(*type_, value),
             TypeInformation::Boolean => self.compile_print_bool(value),
         }
     }
@@ -431,7 +431,7 @@ impl<'ctx> Compiler<'ctx> {
                     "Expr Value",
                 );
 
-                match expr.metadata().type_information.unwrap() {
+                match expr.type_info() {
                     TypeInformation::String(true) => {
                         // We own it, lets just use it!
                         // free existing string
@@ -502,7 +502,7 @@ impl<'ctx> Compiler<'ctx> {
     fn compile_return(&self, expr: &ast::Expression) {
         self.free_used_vars();
 
-        let type_ = expr.metadata().type_information.unwrap();
+        let type_ = expr.type_info();
         let value = self.compile_expression(expr);
 
         match type_ {

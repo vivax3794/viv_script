@@ -33,6 +33,7 @@ pub enum TokenValue {
     LessThanEqual,
     GreaterThan,
     GreaterThanEqual,
+    AndAnd,
 
     OpenParen,
     CloseParen,

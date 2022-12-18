@@ -80,6 +80,13 @@ impl Lexer {
         });
     }
 
+    fn parse_maybe_two(&mut self, next_char: char, if_not: TokenValue, if_is: TokenValue) {
+        match self.peek() {
+            Some(c) if c == next_char => self.emit_token(2, if_is),
+            _ => self.emit_token(1, if_not)
+        }
+    }
+
     pub fn parse_file(&mut self) -> CompilerResult<Vec<Token>> {
         self.eat_whitespace();
         let mut error = Ok(());
@@ -87,14 +94,7 @@ impl Lexer {
             match char {
                 ';' => self.emit_token(1, TokenValue::Semicolon),
                 '+' => self.emit_token(1, TokenValue::Plus),
-                '-' => match self.peek() {
-                    Some('>') => {
-                        self.advance();
-                        self.emit_token(2, TokenValue::Arrow);
-                    }
-                    _ => self.emit_token(1, TokenValue::Minus),
-                },
-                '*' => self.emit_token(1, TokenValue::Star),
+                '-' => self.parse_maybe_two('>', TokenValue::Minus, TokenValue::Arrow),               '*' => self.emit_token(1, TokenValue::Star),
                 '/' => {
                     match self.peek() {
                         Some('/') => {
@@ -134,7 +134,7 @@ impl Lexer {
                     } else {
                         self.emit_token(1, TokenValue::Bang);
                     }
-                }
+                },
                 ',' => self.emit_token(1, TokenValue::Comma),
                 '(' => self.emit_token(1, TokenValue::OpenParen),
                 ')' => self.emit_token(1, TokenValue::CloseParen),
